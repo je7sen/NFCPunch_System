@@ -16,10 +16,10 @@
  */ 
  
 #include <Time.h>  
-// include the library code:
 #include <Wire.h>
 #include <Adafruit_MCP23017.h>
 #include <Adafruit_RGBLCDShield.h>
+#include <Adafruit_NFCShield_I2C.h>
 
 // The shield uses the I2C SCL and SDA pins. On classic Arduinos
 // this is Analog 4 and 5 so you can't use those for analogRead() anymore
@@ -36,6 +36,11 @@ Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
 #define VIOLET 0x5
 #define WHITE 0x7
 
+#define IRQ   (2)
+#define RESET (3)  // Not connected by default on the NFC Shield
+
+Adafruit_NFCShield_I2C nfc(IRQ, RESET);
+
 // single character message tags
 #define TIME_HEADER   'T'   // Header tag for serial time sync message
 #define FORMAT_HEADER 'F'   // Header tag indicating a date format message
@@ -47,29 +52,41 @@ Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
 static boolean isLongFormat = false;
 
 void setup()  {
-  Serial.begin(9600);
+  Serial.begin(115200);
   
   // set up the LCD's number of columns and rows: 
   lcd.begin(16, 2);
   while (!Serial) ; // Needed for Leonardo only
   setSyncProvider( requestSync);  //set function to call when sync required
   Serial.println("Waiting for sync message");
-  lcd.print("Hello, world!");
+  lcd.print("HL Granite and");
+  lcd.setCursor(0,1);
+  lcd.print("Marble Sdn. Bhd.");
   lcd.setBacklight(WHITE);
+  
+  nfc.begin();
+  
+  uint32_t versiondata = nfc.getFirmwareVersion();
+  if (! versiondata) {
+    Serial.print("Didn't find PN53x board");
+    while (1); // halt
+  }
+  // Got ok data, print it out!
+  Serial.print("Found chip PN5"); Serial.println((versiondata>>24) & 0xFF, HEX); 
+  Serial.print("Firmware ver. "); Serial.print((versiondata>>16) & 0xFF, DEC); 
+  Serial.print('.'); Serial.println((versiondata>>8) & 0xFF, DEC);
+  
+  // configure board to read RFID tags
+  nfc.SAMConfig();
+  
+  Serial.println("Waiting for an ISO14443A Card ...");
 }
 
-uint8_t i=0;
-void loop(){  
 
-// set the cursor to column 0, line 1
-  // (note: line 1 is the second row, since counting begins with 0):
-  lcd.setCursor(0, 0);
-  // print the number of seconds since reset:
-  
-
-  uint8_t buttons = lcd.readButtons();
-  
-  if (Serial.available()) {
+void loop(){ 
+ 
+ if (Serial.available()) {
+    
     char c = Serial.read();
     if( c == TIME_HEADER) {
       processSyncMessage();
@@ -77,10 +94,168 @@ void loop(){
     else if( c== FORMAT_HEADER) {
       processFormatMessage();
     }
+    lcd.clear();
   }
+  
   if (timeStatus()!= timeNotSet) {
     digitalClockDisplay();  
-    if (buttons) {
+  } 
+  
+  uint8_t i=0;
+  uint8_t success;
+  uint8_t success1;
+  uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 };  // Buffer to store the returned UID
+  uint8_t uidLength;                        // Length of the UID (4 or 7 bytes depending on ISO14443A card type)
+    
+  // Wait for an ISO14443A type cards (Mifare, etc.).  When one is found
+  // 'uid' will be populated with the UID, and uidLength will indicate
+  // if the uid is 4 bytes (Mifare Classic) or 7 bytes (Mifare Ultralight)
+   
+  success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength);
+  while (digitalRead(IRQ) == 0)
+  {
+  if (Serial.available()) {
+    
+    char c = Serial.read();
+    if( c == TIME_HEADER) {
+      processSyncMessage();
+    }
+    else if( c== FORMAT_HEADER) {
+      processFormatMessage();
+    }
+    lcd.clear();
+  }
+  
+  if (timeStatus()!= timeNotSet) {
+    digitalClockDisplay();  
+  }
+  } 
+   
+
+// set the cursor to column 0, line 1
+  // (note: line 1 is the second row, since counting begins with 0):
+  lcd.setCursor(0, 0);
+  // print the number of seconds since reset:
+  
+  
+  
+  if (success) {
+    // Display some basic information about the card
+    Serial.println("Found an ISO14443A card");
+    Serial.print("  UID Length: ");Serial.print(uidLength, DEC);Serial.println(" bytes");
+    Serial.print("  UID Value: ");
+    nfc.PrintHex(uid, uidLength);
+    Serial.println("");
+    
+    if (uidLength == 4)
+    {
+      // We probably have a Mifare Classic card ... 
+      Serial.println("Seems to be a Mifare Classic card (4 byte UID)");
+	  
+      // Now we need to try to authenticate it for read/write access
+      // Try with the factory default KeyA: 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF
+      Serial.println("Trying to authenticate block 4 with default KEYA value");
+      uint8_t keya[6] = { 0xD3, 0xF7, 0xD3, 0xF7, 0xD3, 0xF7 };
+	  
+	  // Start with block 4 (the first block of sector 1) since sector 0
+	  // contains the manufacturer data and it's probably better just
+	  // to leave it alone unless you know what you're doing
+      success = nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 0, keya);
+	  
+      if (success)
+      {
+        Serial.println("Sector 1 (Blocks 4..7) has been authenticated");
+        uint8_t data[16];
+        uint8_t data1[16];
+		
+        // If you want to write something to block 4 to test with, uncomment
+		// the following line and this text should be read back in a minute
+        // data = { 'a', 'd', 'a', 'f', 'r', 'u', 'i', 't', '.', 'c', 'o', 'm', 0, 0, 0, 0};
+        // success = nfc.mifareclassic_WriteDataBlock (4, data);
+
+        // Try to read the contents of block 4
+        success = nfc.mifareclassic_ReadDataBlock(4, data);
+        success = nfc.mifareclassic_ReadDataBlock(5, data1);
+		
+        if (success)
+        {
+          lcd.clear();
+          // Data seems to have been read ... spit it out
+          Serial.println("Reading Block 4:");
+          nfc.PrintHexChar(data, 16);
+          Serial.println("");
+          for(int y=0; y<5; y++)
+          {
+          lcd.print((char)data[11+y]);
+          }
+          nfc.PrintHexChar(data1, 16);
+          Serial.println("");
+          
+                  
+          
+          for(int y=0; y<16; y++)
+          {
+                       
+            if(data1[y] == 0xFE  )
+            {;}
+            else if(data1[y] == 0x00)
+            {;}
+            else
+            {
+              lcd.print((char)data1[y]);
+            }
+            
+        }
+          // Wait a bit before reading the card again
+         delay(1000);
+         lcd.clear();
+        }
+        else
+        {
+          Serial.println("Ooops ... unable to read the requested block.  Try another key?");
+        }
+      }
+      else
+      {
+        Serial.println("Ooops ... authentication failed: Try another key?");
+      }
+    }
+    
+    if (uidLength == 7)
+    {
+      // We probably have a Mifare Ultralight card ...
+      Serial.println("Seems to be a Mifare Ultralight tag (7 byte UID)");
+	  
+      // Try to read the first general-purpose user page (#4)
+      Serial.println("Reading page 4");
+      uint8_t data[32];
+      success = nfc.mifareultralight_ReadPage (4, data);
+      if (success)
+      {
+        // Data seems to have been read ... spit it out
+        nfc.PrintHexChar(data, 4);
+        Serial.println("");
+		
+        // Wait a bit before reading the card again
+        delay(1000);
+      }
+      else
+      {
+        Serial.println("Ooops ... unable to read the requested page!?");
+      }
+    }
+  }
+  
+  
+    
+  
+
+  uint8_t buttons = lcd.readButtons();
+  
+  
+  
+  //button function
+  if (buttons) {
     lcd.clear();
     lcd.setCursor(0,0);
     if (buttons & BUTTON_UP) {
@@ -103,7 +278,6 @@ void loop(){
       lcd.print("SELECT ");
       lcd.setBacklight(VIOLET);
     }
-  }
   }
   delay(1000);
   
