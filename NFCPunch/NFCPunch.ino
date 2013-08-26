@@ -153,7 +153,8 @@ void loop(){
         uint8_t data[16];
         uint8_t data1[16];
         uint8_t data2[16];
-        uint8_t data3[16] = {'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+        uint8_t inout[16];
+        int w,e,r;
 		
         // If you want to write something to block 4 to test with, uncomment
 		// the following line and this text should be read back in a minute
@@ -164,16 +165,19 @@ void loop(){
         success = nfc.mifareclassic_ReadDataBlock(4, data);
         success = nfc.mifareclassic_ReadDataBlock(5, data1);
         success = nfc.mifareclassic_ReadDataBlock(6, data2);
+        w=hour();
+        e=minute();
+        r=second();
         
         if(data2[0] == 'I')
         {
-          uint8_t data3[16]={'O','U','T',0,0,0,0,0,0,0,0,0,0,0,0,0};
-          success = nfc.mifareclassic_WriteDataBlock (6, data3);
+          uint8_t inout[16]={'O','U','T',0,0,0,0,0,0,0,0,0,0,0,0,0};
+          success = nfc.mifareclassic_WriteDataBlock (6, inout);
         }
         else
         {
-          uint8_t data3[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-          success = nfc.mifareclassic_WriteDataBlock (6, data3);
+          uint8_t inout[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+          success = nfc.mifareclassic_WriteDataBlock (6, inout);
         }
         	
 	
@@ -207,6 +211,14 @@ void loop(){
             
         }
         lcd.setCursor(0,1);
+        
+        lcd.print(w);
+        printDigits(e);
+        printDigits(r);
+        lcd.print(' ');
+        lcd.print(' ');
+        lcd.print(' ');
+        
         for(int y=0; y<16; y++)
           {
                        
