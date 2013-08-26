@@ -117,12 +117,6 @@ void loop(){
   success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength);
   
   
-   
-  
-  
-   
-   
-
 // set the cursor to column 0, line 1
   // (note: line 1 is the second row, since counting begins with 0):
   lcd.setCursor(0, 0);
@@ -158,16 +152,31 @@ void loop(){
         Serial.println("Sector 1 (Blocks 4..7) has been authenticated");
         uint8_t data[16];
         uint8_t data1[16];
+        uint8_t data2[16];
+        uint8_t data3[16] = {'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 		
         // If you want to write something to block 4 to test with, uncomment
 		// the following line and this text should be read back in a minute
-        // data = { 'a', 'd', 'a', 'f', 'r', 'u', 'i', 't', '.', 'c', 'o', 'm', 0, 0, 0, 0};
-        // success = nfc.mifareclassic_WriteDataBlock (4, data);
+//         data = { 'a', 'd', 'a', 'f', 'r', 'u', 'i', 't', '.', 'c', 'o', 'm', 0, 0, 0, 0};
+//         success = nfc.mifareclassic_WriteDataBlock (4, data);
 
         // Try to read the contents of block 4
         success = nfc.mifareclassic_ReadDataBlock(4, data);
         success = nfc.mifareclassic_ReadDataBlock(5, data1);
-		
+        success = nfc.mifareclassic_ReadDataBlock(6, data2);
+        
+        if(data2[0] == 'I')
+        {
+          uint8_t data3[16]={'O','U','T',0,0,0,0,0,0,0,0,0,0,0,0,0};
+          success = nfc.mifareclassic_WriteDataBlock (6, data3);
+        }
+        else
+        {
+          uint8_t data3[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+          success = nfc.mifareclassic_WriteDataBlock (6, data3);
+        }
+        	
+	
         if (success)
         {
           lcd.clear();
@@ -197,6 +206,22 @@ void loop(){
             }
             
         }
+        lcd.setCursor(0,1);
+        for(int y=0; y<16; y++)
+          {
+                       
+            if(data2[y] == 0xFE  )
+            {;}
+            else if(data2[y] == 0x00)
+            {;}
+            else
+            {
+              lcd.print((char)data2[y]);
+            }
+            
+        }
+        nfc.PrintHexChar(data2, 16);
+          Serial.println("");
           // Wait a bit before reading the card again
          delay(1000);
          lcd.clear();
