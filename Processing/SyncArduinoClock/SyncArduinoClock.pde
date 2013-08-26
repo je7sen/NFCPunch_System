@@ -27,7 +27,7 @@ void setup() {
   size(200, 200);
   println(Serial.list());
   println(" Connecting to -> " + Serial.list()[portIndex]);
-  myPort = new Serial(this,Serial.list()[portIndex], 9600);
+  myPort = new Serial(this,Serial.list()[portIndex], 115200);
   println(getTimeNow());
 }
 

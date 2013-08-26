@@ -64,6 +64,8 @@ void setup()  {
   lcd.print("Marble Sdn. Bhd.");
   lcd.setBacklight(WHITE);
   
+  pinMode(9,OUTPUT);
+  
   nfc.begin();
   
   uint32_t versiondata = nfc.getFirmwareVersion();
@@ -78,13 +80,14 @@ void setup()  {
   
   // configure board to read RFID tags
   nfc.SAMConfig();
-  
+  nfc.setPassiveActivationRetries(2);
   Serial.println("Waiting for an ISO14443A Card ...");
 }
 
 
 void loop(){ 
- 
+  
+  
  if (Serial.available()) {
     
     char c = Serial.read();
@@ -112,24 +115,12 @@ void loop(){
   // if the uid is 4 bytes (Mifare Classic) or 7 bytes (Mifare Ultralight)
    
   success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength);
-  while (digitalRead(IRQ) == 0)
-  {
-  if (Serial.available()) {
-    
-    char c = Serial.read();
-    if( c == TIME_HEADER) {
-      processSyncMessage();
-    }
-    else if( c== FORMAT_HEADER) {
-      processFormatMessage();
-    }
-    lcd.clear();
-  }
   
-  if (timeStatus()!= timeNotSet) {
-    digitalClockDisplay();  
-  }
-  } 
+  
+   
+  
+  
+   
    
 
 // set the cursor to column 0, line 1
@@ -247,6 +238,9 @@ void loop(){
   }
   
   
+  
+    
+  
     
   
 
@@ -279,7 +273,7 @@ void loop(){
       lcd.setBacklight(VIOLET);
     }
   }
-  delay(1000);
+ 
   
   
   
