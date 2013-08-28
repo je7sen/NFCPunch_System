@@ -17,6 +17,7 @@
  
 #include <Time.h>  
 #include <Wire.h>
+#include <SD.h>
 #include <Adafruit_MCP23017.h>
 #include <Adafruit_RGBLCDShield.h>
 #include <Adafruit_NFCShield_I2C.h>
@@ -50,13 +51,17 @@ Adafruit_NFCShield_I2C nfc(IRQ, RESET);
 #define TIME_REQUEST  7     // ASCII bell character requests a time sync message 
 
 static boolean isLongFormat = false;
+const int chipSelect = 4;
 
 void setup()  {
   Serial.begin(115200);
-  
+  while (!Serial) {
+    ; // Needed for Leonardo only
+  }
+ 
   // set up the LCD's number of columns and rows: 
   lcd.begin(16, 2);
-  while (!Serial) ; // Needed for Leonardo only
+  
   setSyncProvider( requestSync);  //set function to call when sync required
   Serial.println("Waiting for sync message");
   lcd.print("HL Granite and");
@@ -65,6 +70,14 @@ void setup()  {
   lcd.setBacklight(WHITE);
   
   pinMode(9,OUTPUT);
+  pinMode(4,OUTPUT);
+  
+  if (!SD.begin(chipSelect)) {
+    Serial.println("Card failed, or not present");
+    // don't do anything more:
+    return;
+  }
+  Serial.println("card initialized.");
   
   nfc.begin();
   
@@ -82,6 +95,8 @@ void setup()  {
   nfc.SAMConfig();
   nfc.setPassiveActivationRetries(2);
   Serial.println("Waiting for an ISO14443A Card ...");
+  
+  
 }
 
 
@@ -155,7 +170,8 @@ void loop(){
         uint8_t data2[16];
         uint8_t inout[16];
         int w,e,r;
-		
+	String dataString = "";
+	
         // If you want to write something to block 4 to test with, uncomment
 		// the following line and this text should be read back in a minute
 //         data = { 'a', 'd', 'a', 'f', 'r', 'u', 'i', 't', '.', 'c', 'o', 'm', 0, 0, 0, 0};
@@ -191,6 +207,7 @@ void loop(){
           for(int y=0; y<5; y++)
           {
           lcd.print((char)data[11+y]);
+          dataString += String((char)data[11+y]);
           }
           nfc.PrintHexChar(data1, 16);
           Serial.println("");
@@ -207,6 +224,7 @@ void loop(){
             else
             {
               lcd.print((char)data1[y]);
+              dataString += String((char)data1[y]);
             }
             
         }
@@ -234,6 +252,20 @@ void loop(){
         }
         nfc.PrintHexChar(data2, 16);
           Serial.println("");
+          
+          File dataFile = SD.open("datalog.txt", FILE_WRITE);
+          
+          if (dataFile) {
+    dataFile.println(dataString);
+    dataFile.close();
+    // print to the serial port too:
+    Serial.println(dataString);
+  }  
+  // if the file isn't open, pop up an error:
+  else {
+    Serial.println("error opening datalog.txt");
+  }
+          
           // Wait a bit before reading the card again
          delay(1000);
          lcd.clear();
