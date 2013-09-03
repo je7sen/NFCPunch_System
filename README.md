@@ -6,7 +6,7 @@ To create a punch system to replace current analog punch.
 RFID thechnology is implemented in order to recognize each employees.
 
 
-###
+##
 Hardware requirement 
 ===============
 
