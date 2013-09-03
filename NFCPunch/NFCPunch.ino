@@ -44,10 +44,6 @@ Adafruit_NFCShield_I2C nfc(IRQ, RESET);
 
 // single character message tags
 #define TIME_HEADER   'T'   // Header tag for serial time sync message
-#define FORMAT_HEADER 'F'   // Header tag indicating a date format message
-#define FORMAT_SHORT  's'   // short month and day strings
-#define FORMAT_LONG   'l'   // (lower case l) long month and day strings
-
 #define TIME_REQUEST  7     // ASCII bell character requests a time sync message 
 
 static boolean isLongFormat = false;
@@ -108,9 +104,6 @@ void loop(){
     char c = Serial.read();
     if( c == TIME_HEADER) {
       processSyncMessage();
-    }
-    else if( c== FORMAT_HEADER) {
-      processFormatMessage();
     }
     lcd.clear();
   }
@@ -354,17 +347,13 @@ void digitalClockDisplay(){
   printDigits(minute());
   printDigits(second());
   lcd.print(" ");
-  if(isLongFormat)
-    lcd.print(dayStr(weekday()));
-  else  
+  
    lcd.print(dayShortStr(weekday()));
   lcd.print(" ");
   lcd.setCursor(0, 1);
   lcd.print(day());
   lcd.print(" ");
-  if(isLongFormat)
-     lcd.print(monthStr(month()));
-  else
+  
      lcd.print(monthShortStr(month()));
   lcd.print(" ");
   lcd.print(year()); 
@@ -379,17 +368,7 @@ void printDigits(int digits){
   lcd.print(digits);
 }
 
-void  processFormatMessage() {
-   char c = Serial.read();
-   if( c == FORMAT_LONG){
-      isLongFormat = true;
-      lcd.println("Setting long format");
-   }
-   else if( c == FORMAT_SHORT){
-      isLongFormat = false;   
-      lcd.println("Setting short format");
-   }
-}
+
 
 void processSyncMessage() {
   unsigned long pctime;
