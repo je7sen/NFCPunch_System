@@ -1,22 +1,10 @@
-/* 
- * TimeSerialDateStrings.pde
- * example code illustrating Time library date strings
- *
- * This sketch adds date string functionality to TimeSerial sketch
- * Also shows how to handle different messages
- *
- * A message starting with a time header sets the time
- * A Processing example sketch to automatically send the messages is inclided in the download
- * On Linux, you can use "date +T%s > /dev/ttyACM0" (UTC time zone)
- *
- * A message starting with a format header sets the date format
- *
- * send: Fs\n for short date format
- * send: Fl\n for long date format 
- */ 
- 
+#include <Ethernet.h>
+#include <EthernetUdp.h>
+
+
 #include <Time.h>  
 #include <Wire.h>
+#include <SPI.h>
 #include <SD.h>
 #include <Adafruit_MCP23017.h>
 #include <Adafruit_RGBLCDShield.h>
@@ -46,55 +34,77 @@ Adafruit_NFCShield_I2C nfc(IRQ, RESET);
 #define TIME_HEADER   'T'   // Header tag for serial time sync message
 #define TIME_REQUEST  7     // ASCII bell character requests a time sync message 
 
-static boolean isLongFormat = false;
-const int chipSelect = 4;
+//byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED }; 
+//IPAddress timeServer(132, 163, 4, 101);
+//const int timeZone = +8; 
 
-void setup()  {
+//EthernetUDP Udp;
+//unsigned int localPort = 8888; 
+
+void setup() {
+  
   Serial.begin(115200);
   while (!Serial) {
     ; // Needed for Leonardo only
   }
- 
-  // set up the LCD's number of columns and rows: 
-  lcd.begin(16, 2);
-  
-  setSyncProvider( requestSync);  //set function to call when sync required
-  Serial.println("Waiting for sync message");
-  lcd.print("HL Granite and");
-  lcd.setCursor(0,1);
-  lcd.print("Marble Sdn. Bhd.");
-  lcd.setBacklight(WHITE);
   
   pinMode(9,OUTPUT);
   pinMode(4,OUTPUT);
   
-  if (!SD.begin(chipSelect)) {
-    Serial.println("Card failed, or not present");
-    // don't do anything more:
-    return;
-  }
-  Serial.println("card initialized.");
-  
+  delay(400);
+   
+  // set up the LCD's number of columns and rows: 
+  lcd.begin(16, 2);
   nfc.begin();
-  
-  uint32_t versiondata = nfc.getFirmwareVersion();
-  if (! versiondata) {
-    Serial.print("Didn't find PN53x board");
-    while (1); // halt
-  }
-  // Got ok data, print it out!
-  Serial.print("Found chip PN5"); Serial.println((versiondata>>24) & 0xFF, HEX); 
-  Serial.print("Firmware ver. "); Serial.print((versiondata>>16) & 0xFF, DEC); 
-  Serial.print('.'); Serial.println((versiondata>>8) & 0xFF, DEC);
+     
+  setSyncProvider(requestSync);  //set function to call when sync required
+//  Serial.println("Waiting for sync message");
+  lcd.print("HL Granite and");
+  lcd.setCursor(0,1);
+  lcd.print("Marble Sdn. Bhd.");
+  lcd.setBacklight(WHITE);
+    
   
   // configure board to read RFID tags
   nfc.SAMConfig();
-  nfc.setPassiveActivationRetries(2);
-  Serial.println("Waiting for an ISO14443A Card ...");
+  nfc.setPassiveActivationRetries(3);
+//  Serial.println("Waiting for an ISO14443A Card ...");
   
+  
+   if (!SD.begin(4)) {
+//    Serial.println("Card failed, or not present");
+    // don't do anything more:
+    return;
+    }
+    else{
+      if (SD.exists("datalog.txt")) 
+      {
+//        Serial.println("card initialized."); 
+//        Serial.println("datalog.txt exists.");
+      }
+      else {
+//        Serial.println("datalog.txt doesn't exist.");
+        return;
+      } 
+    }
+    
+//    if (Ethernet.begin(mac) == 0) {
+//    // no point in carrying on, so do nothing forevermore:
+//    while (1) {
+////      Serial.println("Failed to configure Ethernet using DHCP");
+//      delay(10000);
+//    }
+//  }
+//  Serial.print("IP number assigned by DHCP is ");
+//  Serial.println(Ethernet.localIP());
+//  Udp.begin(localPort);
+//  Serial.println("waiting for sync");
+//  setSyncProvider(getNtpTime);
+    
   
 }
 
+time_t prevDisplay = 0;
 
 void loop(){ 
   
@@ -112,9 +122,15 @@ void loop(){
     digitalClockDisplay();  
   } 
   
-  uint8_t i=0;
+//  if (timeStatus() != timeNotSet) {
+//    if (now() != prevDisplay) { //update the display only if time has changed
+//      prevDisplay = now();
+//      digitalClockDisplay();  
+//    }
+//  }
+  
+  
   uint8_t success;
-  uint8_t success1;
   uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 };  // Buffer to store the returned UID
   uint8_t uidLength;                        // Length of the UID (4 or 7 bytes depending on ISO14443A card type)
     
@@ -134,20 +150,20 @@ void loop(){
   
   if (success) {
     // Display some basic information about the card
-    Serial.println("Found an ISO14443A card");
-    Serial.print("  UID Length: ");Serial.print(uidLength, DEC);Serial.println(" bytes");
-    Serial.print("  UID Value: ");
-    nfc.PrintHex(uid, uidLength);
-    Serial.println("");
+//    Serial.println("Found an ISO14443A card");
+//    Serial.print("  UID Length: ");Serial.print(uidLength, DEC);Serial.println(" bytes");
+//    Serial.print("  UID Value: ");
+//    nfc.PrintHex(uid, uidLength);
+//    Serial.println("");
     
     if (uidLength == 4)
     {
       // We probably have a Mifare Classic card ... 
-      Serial.println("Seems to be a Mifare Classic card (4 byte UID)");
+//      Serial.println("Seems to be a Mifare Classic card (4 byte UID)");
 	  
       // Now we need to try to authenticate it for read/write access
       // Try with the factory default KeyA: 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF
-      Serial.println("Trying to authenticate block 4 with default KEYA value");
+//      Serial.println("Trying to authenticate block 4 with default KEYA value");
       uint8_t keya[6] = { 0xD3, 0xF7, 0xD3, 0xF7, 0xD3, 0xF7 };
 	  
 	  // Start with block 4 (the first block of sector 1) since sector 0
@@ -157,12 +173,11 @@ void loop(){
 	  
       if (success)
       {
-        Serial.println("Sector 1 (Blocks 4..7) has been authenticated");
+//        Serial.println("Sector 1 (Blocks 4..7) has been authenticated");
         uint8_t data[16];
         uint8_t data1[16];
         uint8_t data2[16];
-        uint8_t inout[16];
-        int w,e,r;
+        uint8_t w,e,r;
 	String dataString = "";
 	
         // If you want to write something to block 4 to test with, uncomment
@@ -194,20 +209,20 @@ void loop(){
         {
           lcd.clear();
           // Data seems to have been read ... spit it out
-          Serial.println("Reading Block 4:");
-          nfc.PrintHexChar(data, 16);
-          Serial.println("");
-          for(int y=0; y<5; y++)
+//          Serial.println("Reading Block 4:");
+//          nfc.PrintHexChar(data, 16);
+//          Serial.println("");
+          for(uint8_t y=0; y<5; y++)
           {
           lcd.print((char)data[11+y]);
           dataString += String((char)data[11+y]);
           }
-          nfc.PrintHexChar(data1, 16);
-          Serial.println("");
+//          nfc.PrintHexChar(data1, 16);
+//          Serial.println("");
           
                   
           
-          for(int y=0; y<16; y++)
+          for(uint8_t y=0; y<16; y++)
           {
                        
             if(data1[y] == 0xFE  )
@@ -230,7 +245,7 @@ void loop(){
         lcd.print(' ');
         lcd.print(' ');
         
-        for(int y=0; y<16; y++)
+        for(uint8_t y=0; y<16; y++)
           {
                        
             if(data2[y] == 0xFE  )
@@ -243,20 +258,47 @@ void loop(){
             }
             
         }
-        nfc.PrintHexChar(data2, 16);
-          Serial.println("");
+//        nfc.PrintHexChar(data2, 16);
+//          Serial.println("");
           
-          File dataFile = SD.open("datalog.txt", FILE_WRITE);
-          
-          if (dataFile) {
-    dataFile.println(dataString);
-    dataFile.close();
-    // print to the serial port too:
-    Serial.println(dataString);
-  }  
-  // if the file isn't open, pop up an error:
-  else {
-    Serial.println("error opening datalog.txt");
+   File dataFile = SD.open("datalog.txt", FILE_WRITE);
+        
+   if (dataFile) {
+        dataFile.print(dataString);
+        dataFile.print(' ');
+        
+        dataFile.print(w);
+        dataFile.print(":");
+        dataFile.print(e);
+        dataFile.print(":");
+        dataFile.print(r);
+        dataFile.print(' ');
+        
+        dataFile.print(dayShortStr(weekday()));
+        dataFile.print(' ');
+        
+        dataFile.print(day());
+        dataFile.print(monthShortStr(month()));
+        dataFile.print(year());
+        dataFile.print(' ');
+        
+        if(data2[0]=='I')
+        {
+          dataFile.println("IN");
+        }
+        else
+        {
+          dataFile.println("OUT");
+        }
+         
+        
+        dataFile.close();
+        // print to the serial port too:
+//        Serial.println(dataString);
+    }  
+    // if the file isn't open, pop up an error:
+    else {
+//    Serial.println("error opening datalog.txt");
   }
           
           // Wait a bit before reading the card again
@@ -265,76 +307,44 @@ void loop(){
         }
         else
         {
-          Serial.println("Ooops ... unable to read the requested block.  Try another key?");
+//          Serial.println("Ooops ... unable to read the requested block.  Try another key?");
         }
       }
       else
       {
-        Serial.println("Ooops ... authentication failed: Try another key?");
+//        Serial.println("Ooops ... authentication failed: Try another key?");
       }
     }
-    
-    if (uidLength == 7)
-    {
-      // We probably have a Mifare Ultralight card ...
-      Serial.println("Seems to be a Mifare Ultralight tag (7 byte UID)");
-	  
-      // Try to read the first general-purpose user page (#4)
-      Serial.println("Reading page 4");
-      uint8_t data[32];
-      success = nfc.mifareultralight_ReadPage (4, data);
-      if (success)
-      {
-        // Data seems to have been read ... spit it out
-        nfc.PrintHexChar(data, 4);
-        Serial.println("");
-		
-        // Wait a bit before reading the card again
-        delay(1000);
-      }
-      else
-      {
-        Serial.println("Ooops ... unable to read the requested page!?");
-      }
-    }
+ 
   }
   
-  
-  
+//  uint8_t buttons = lcd.readButtons();
     
-  
-    
-  
-
-  uint8_t buttons = lcd.readButtons();
-  
-  
-  
   //button function
-  if (buttons) {
-    lcd.clear();
-    lcd.setCursor(0,0);
-    if (buttons & BUTTON_UP) {
-      lcd.print("UP ");
-      lcd.setBacklight(RED);
-    }
-    if (buttons & BUTTON_DOWN) {
-      lcd.print("DOWN ");
-      lcd.setBacklight(YELLOW);
-    }
-    if (buttons & BUTTON_LEFT) {
-      lcd.print("LEFT ");
-      lcd.setBacklight(GREEN);
-    }
-    if (buttons & BUTTON_RIGHT) {
-      lcd.print("RIGHT ");
-      lcd.setBacklight(TEAL);
-    }
-    if (buttons & BUTTON_SELECT) {
-      lcd.print("SELECT ");
-      lcd.setBacklight(VIOLET);
-    }
-  }
+//  if (buttons) {
+//    lcd.clear();
+//    lcd.setCursor(0,0);
+//    if (buttons & BUTTON_UP) {
+//      lcd.print("UP ");
+//      lcd.setBacklight(RED);
+//    }
+//    if (buttons & BUTTON_DOWN) {
+//      lcd.print("DOWN ");
+//      lcd.setBacklight(YELLOW);
+//    }
+//    if (buttons & BUTTON_LEFT) {
+//      lcd.print("LEFT ");
+//      lcd.setBacklight(GREEN);
+//    }
+//    if (buttons & BUTTON_RIGHT) {
+//      lcd.print("RIGHT ");
+//      lcd.setBacklight(TEAL);
+//    }
+//    if (buttons & BUTTON_SELECT) {
+//      lcd.print("SELECT ");
+//      lcd.setBacklight(VIOLET);
+//    }
+//  }
  
   
   
@@ -348,13 +358,13 @@ void digitalClockDisplay(){
   printDigits(second());
   lcd.print(" ");
   
-   lcd.print(dayShortStr(weekday()));
+  lcd.print(dayShortStr(weekday()));
   lcd.print(" ");
   lcd.setCursor(0, 1);
   lcd.print(day());
   lcd.print(" ");
   
-     lcd.print(monthShortStr(month()));
+  lcd.print(monthShortStr(month()));
   lcd.print(" ");
   lcd.print(year()); 
   
@@ -385,4 +395,57 @@ time_t requestSync()
   Serial.write(TIME_REQUEST);  
   return 0; // the time will be sent later in response to serial mesg
 }
+
+//
+///*-------- NTP code ----------*/
+//
+//const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
+//byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming & outgoing packets
+//
+//time_t getNtpTime()
+//{
+//  while (Udp.parsePacket() > 0) ; // discard any previously received packets
+////  Serial.println("Transmit NTP Request");
+//  sendNTPpacket(timeServer);
+//  uint32_t beginWait = millis();
+//  while (millis() - beginWait < 1500) {
+//    int size = Udp.parsePacket();
+//    if (size >= NTP_PACKET_SIZE) {
+////      Serial.println("Receive NTP Response");
+//      Udp.read(packetBuffer, NTP_PACKET_SIZE);  // read packet into the buffer
+//      unsigned long secsSince1900;
+//      // convert four bytes starting at location 40 to a long integer
+//      secsSince1900 =  (unsigned long)packetBuffer[40] << 24;
+//      secsSince1900 |= (unsigned long)packetBuffer[41] << 16;
+//      secsSince1900 |= (unsigned long)packetBuffer[42] << 8;
+//      secsSince1900 |= (unsigned long)packetBuffer[43];
+//      return secsSince1900 - 2208988800UL + timeZone * SECS_PER_HOUR;
+//    }
+//  }
+////  Serial.println("No NTP Response :-(");
+//  return 0; // return 0 if unable to get the time
+//}
+//
+//// send an NTP request to the time server at the given address
+//void sendNTPpacket(IPAddress &address)
+//{
+//  // set all bytes in the buffer to 0
+//  memset(packetBuffer, 0, NTP_PACKET_SIZE);
+//  // Initialize values needed to form NTP request
+//  // (see URL above for details on the packets)
+//  packetBuffer[0] = 0b11100011;   // LI, Version, Mode
+//  packetBuffer[1] = 0;     // Stratum, or type of clock
+//  packetBuffer[2] = 6;     // Polling Interval
+//  packetBuffer[3] = 0xEC;  // Peer Clock Precision
+//  // 8 bytes of zero for Root Delay & Root Dispersion
+//  packetBuffer[12]  = 49;
+//  packetBuffer[13]  = 0x4E;
+//  packetBuffer[14]  = 49;
+//  packetBuffer[15]  = 52;
+//  // all NTP fields have been given values, now
+//  // you can send a packet requesting a timestamp:                 
+//  Udp.beginPacket(address, 123); //NTP requests are to port 123
+//  Udp.write(packetBuffer, NTP_PACKET_SIZE);
+//  Udp.endPacket();
+//}
 
