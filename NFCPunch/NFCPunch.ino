@@ -55,8 +55,7 @@ void setup() {
    
   // set up the LCD's number of columns and rows: 
   lcd.begin(16, 2);
-  nfc.begin();
-     
+       
   setSyncProvider(requestSync);  //set function to call when sync required
 //  Serial.println("Waiting for sync message");
   lcd.print("HL Granite and");
@@ -64,30 +63,32 @@ void setup() {
   lcd.print("Marble Sdn. Bhd.");
   lcd.setBacklight(WHITE);
     
-  
-  // configure board to read RFID tags
-  nfc.SAMConfig();
-  nfc.setPassiveActivationRetries(3);
-//  Serial.println("Waiting for an ISO14443A Card ...");
-  
-  
    if (!SD.begin(4)) {
-//    Serial.println("Card failed, or not present");
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("No Sd card.");
+    delay(1500);
     // don't do anything more:
     return;
     }
     else{
-      if (SD.exists("datalog.txt")) 
+      if (!SD.exists("datalog.txt")) 
       {
-//        Serial.println("card initialized."); 
-//        Serial.println("datalog.txt exists.");
-      }
-      else {
-//        Serial.println("datalog.txt doesn't exist.");
+        lcd.clear();
+        lcd.print("No File Found.");
+        delay(1500);
         return;
-      } 
+      }
+      else{
+      nfc.begin();
+      // configure board to read RFID tags
+      nfc.SAMConfig();
+      nfc.setPassiveActivationRetries(3);
+      //  Serial.println("Waiting for an ISO14443A Card ...");
+      }
+       
     }
-    
+       
 //    if (Ethernet.begin(mac) == 0) {
 //    // no point in carrying on, so do nothing forevermore:
 //    while (1) {
@@ -192,20 +193,22 @@ void loop(){
         w=hour();
         e=minute();
         r=second();
+        uint8_t buff = data2[0];
         
         if(data2[0] == 'I')
         {
           uint8_t inout[16]={'O','U','T',0,0,0,0,0,0,0,0,0,0,0,0,0};
-          success = nfc.mifareclassic_WriteDataBlock (6, inout);
+          nfc.mifareclassic_WriteDataBlock (6, inout);
         }
         else
         {
           uint8_t inout[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-          success = nfc.mifareclassic_WriteDataBlock (6, inout);
+          nfc.mifareclassic_WriteDataBlock (6, inout);
         }
-        	
+        
+        nfc.mifareclassic_ReadDataBlock(6, data2);	
 	
-        if (success)
+        if (buff != data2[0])
         {
           lcd.clear();
           // Data seems to have been read ... spit it out
@@ -221,8 +224,7 @@ void loop(){
 //          Serial.println("");
           
                   
-          
-          for(uint8_t y=0; y<16; y++)
+         for(uint8_t y=0; y<16; y++)
           {
                        
             if(data1[y] == 0xFE  )
@@ -294,12 +296,12 @@ void loop(){
         
         dataFile.close();
         // print to the serial port too:
-//        Serial.println(dataString);
-    }  
-    // if the file isn't open, pop up an error:
-    else {
-//    Serial.println("error opening datalog.txt");
-  }
+        // Serial.println(dataString);
+        }  
+        // if the file isn't open, pop up an error:
+        else {
+        // Serial.println("error opening datalog.txt");
+        }
           
           // Wait a bit before reading the card again
          delay(1000);
@@ -307,6 +309,12 @@ void loop(){
         }
         else
         {
+          lcd.clear();
+          lcd.print("     Error!");
+          lcd.setCursor(0,1);
+          lcd.print("  Punch Again!");
+          delay(500);
+          lcd.setCursor(0,0);
 //          Serial.println("Ooops ... unable to read the requested block.  Try another key?");
         }
       }
