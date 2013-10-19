@@ -50,6 +50,9 @@ void setup() {
   
   pinMode(9,OUTPUT);
   pinMode(4,OUTPUT);
+  pinMode(5,OUTPUT);
+  pinMode(6,OUTPUT);
+  pinMode(7,OUTPUT);
   
   delay(400);
    
@@ -88,6 +91,15 @@ void setup() {
       }
        
     }
+    
+    digitalWrite(5,HIGH);
+    digitalWrite(6,HIGH);
+    digitalWrite(7,HIGH);
+    delay(500);
+    digitalWrite(5,LOW);
+    digitalWrite(6,LOW);
+    digitalWrite(7,LOW);
+    
        
 //    if (Ethernet.begin(mac) == 0) {
 //    // no point in carrying on, so do nothing forevermore:
@@ -210,6 +222,8 @@ void loop(){
 	
         if (buff != data2[0])
         {
+          digitalWrite(7,LOW);
+          greenLed();
           lcd.clear();
           // Data seems to have been read ... spit it out
 //          Serial.println("Reading Block 4:");
@@ -306,9 +320,12 @@ void loop(){
           // Wait a bit before reading the card again
          delay(1000);
          lcd.clear();
+         closeAll();
+         delay(1000);
         }
         else
         {
+          redLed();
           lcd.clear();
           lcd.print("     Error!");
           lcd.setCursor(0,1);
@@ -396,6 +413,25 @@ void processSyncMessage() {
    if( pctime >= DEFAULT_TIME) { // check the integer is a valid time (greater than Jan 1 2013)
      setTime(pctime); // Sync Arduino clock to the time received on the serial port
    } 
+}
+
+void redLed()
+{
+  digitalWrite(7,HIGH);
+  
+}
+
+void greenLed()
+{
+  digitalWrite(6,HIGH);
+  digitalWrite(5,HIGH);
+}
+
+void closeAll()
+{
+  digitalWrite(5,LOW);
+  digitalWrite(6,LOW);
+  digitalWrite(7,LOW);
 }
 
 time_t requestSync()
