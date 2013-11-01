@@ -1,6 +1,7 @@
-#include <Ethernet.h>
-#include <EthernetUdp.h>
 
+//#include <Ethernet.h>
+//#include <EthernetUdp.h>
+//#include <aJSON.h>
 
 #include <Time.h>  
 #include <Wire.h>
@@ -35,8 +36,16 @@ Adafruit_NFCShield_I2C nfc(IRQ, RESET);
 #define TIME_REQUEST  7     // ASCII bell character requests a time sync message 
 
 //byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED }; 
-//IPAddress timeServer(132, 163, 4, 101);
-//const int timeZone = +8; 
+////IPAddress timeServer(132, 163, 4, 101);
+////const int timeZone = +8; 
+//EthernetClient client;
+//byte server[] = { 209, 85, 229, 101 };  //Google IP
+//char tableId[] = "1mMBO0mOoLxpg5Q2eQs3pqps-vSpLikZ78DoukHw";
+//char clientId[] = "337610643991.apps.googleusercontent.com";
+//char clientSecret[] = "v9yiiz_wz85zu7V2zCkRg63R";
+char APIKey[] = "AIzaSyAqF3_FF9F4cVZ3TapsscuYR2WiPWooUqg";
+//char preUrl[] = "POST https://www.googleapis.com/fusiontables/v1/query?sql=INSERT+INTO+1mMBO0mOoLxpg5Q2eQs3pqps-vSpLikZ78DoukHw+(Employee%2C+Time%2C+Weekday%2C+Date%2C+InOut)+VALUES+('Red+Shoes'%2C+'10%3A01'%2C+'FRI'%2C+'1%2F11%2F13'%2C+'IN')&key=";
+//char* json_string;
 
 //EthernetUDP Udp;
 //unsigned int localPort = 8888; 
@@ -49,10 +58,10 @@ void setup() {
   }
   
   pinMode(9,OUTPUT);
-  pinMode(4,OUTPUT);
-  pinMode(5,OUTPUT);
-  pinMode(6,OUTPUT);
-  pinMode(7,OUTPUT);
+  pinMode(4,OUTPUT);  //sd card
+  pinMode(5,OUTPUT);  //buzzer
+  pinMode(6,OUTPUT);  //green LED  
+  pinMode(7,OUTPUT);  //red LED
   
   delay(400);
    
@@ -92,11 +101,10 @@ void setup() {
        
     }
     
-    digitalWrite(5,HIGH);
+    beep(200);
     digitalWrite(6,HIGH);
     digitalWrite(7,HIGH);
     delay(500);
-    digitalWrite(5,LOW);
     digitalWrite(6,LOW);
     digitalWrite(7,LOW);
     
@@ -108,12 +116,22 @@ void setup() {
 //      delay(10000);
 //    }
 //  }
+  
+//  if (client.connect(server,80)){
+//    
+//    client.print("POST https://www.googleapis.com/fusiontables/v1/query?sql=INSERT+INTO+1mMBO0mOoLxpg5Q2eQs3pqps-vSpLikZ78DoukHw+(Employee%2C+Time%2C+Weekday%2C+Date%2C+InOut)+VALUES+('Red+Shoes'%2C+'10%3A01'%2C+'FRI'%2C+'1%2F11%2F13'%2C+'IN')&key=");
+//    client.print(APIKey);
+//    client.println("");
+//    client.println("Authorization:  Bearer ya29.AHES6ZRdlCrsof9nwjEc1frgFO6Cem1oHgwZklRaV0UlCqI16sXRcg");
+//    client.println("X-JavaScript-User-Agent:  Google APIs Explorer");
+//  } 
 //  Serial.print("IP number assigned by DHCP is ");
 //  Serial.println(Ethernet.localIP());
 //  Udp.begin(localPort);
 //  Serial.println("waiting for sync");
 //  setSyncProvider(getNtpTime);
     
+ 
   
 }
 
@@ -281,22 +299,22 @@ void loop(){
         
    if (dataFile) {
         dataFile.print(dataString);
-        dataFile.print(' ');
+        dataFile.print("\t");
         
         dataFile.print(w);
         dataFile.print(":");
         dataFile.print(e);
         dataFile.print(":");
         dataFile.print(r);
-        dataFile.print(' ');
+        dataFile.print("\t");
         
         dataFile.print(dayShortStr(weekday()));
-        dataFile.print(' ');
+        dataFile.print("\t");
         
         dataFile.print(day());
         dataFile.print(monthShortStr(month()));
         dataFile.print(year());
-        dataFile.print(' ');
+        dataFile.print("\t");
         
         if(data2[0]=='I')
         {
@@ -319,9 +337,9 @@ void loop(){
           
           // Wait a bit before reading the card again
          delay(1000);
-         lcd.clear();
          closeAll();
          delay(1000);
+         lcd.clear();
         }
         else
         {
@@ -415,6 +433,14 @@ void processSyncMessage() {
    } 
 }
 
+void beep(unsigned char delayms)
+{
+  analogWrite(5, 20);
+  delay(delayms);
+  analogWrite(5, 0);
+  delay(delayms);
+}
+
 void redLed()
 {
   digitalWrite(7,HIGH);
@@ -424,7 +450,8 @@ void redLed()
 void greenLed()
 {
   digitalWrite(6,HIGH);
-  digitalWrite(5,HIGH);
+  beep(200);
+//  digitalWrite(5,HIGH);
 }
 
 void closeAll()
