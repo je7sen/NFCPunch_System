@@ -1,12 +1,12 @@
 
-//#include <Ethernet.h>
+#include <Ethernet.h>
 //#include <EthernetUdp.h>
 //#include <aJSON.h>
 
 #include <Time.h>  
 #include <Wire.h>
 #include <SPI.h>
-#include <SD.h>
+//#include <SD.h>
 #include <Adafruit_MCP23017.h>
 #include <Adafruit_RGBLCDShield.h>
 #include <Adafruit_NFCShield_I2C.h>
@@ -35,15 +35,18 @@ Adafruit_NFCShield_I2C nfc(IRQ, RESET);
 #define TIME_HEADER   'T'   // Header tag for serial time sync message
 #define TIME_REQUEST  7     // ASCII bell character requests a time sync message 
 
-//byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED }; 
+byte mac[] = { 0x90, 0xA2, 0xDA, 0x0D, 0xB9, 0xDF }; 
+char server[] = "api.pushingbox.com";
+String NFC_Id("vB9504FE1A766082");
+
 ////IPAddress timeServer(132, 163, 4, 101);
 ////const int timeZone = +8; 
-//EthernetClient client;
+EthernetClient client;
 //byte server[] = { 209, 85, 229, 101 };  //Google IP
 //char tableId[] = "1mMBO0mOoLxpg5Q2eQs3pqps-vSpLikZ78DoukHw";
 //char clientId[] = "337610643991.apps.googleusercontent.com";
 //char clientSecret[] = "v9yiiz_wz85zu7V2zCkRg63R";
-char APIKey[] = "AIzaSyAqF3_FF9F4cVZ3TapsscuYR2WiPWooUqg";
+//char APIKey[] = "AIzaSyAqF3_FF9F4cVZ3TapsscuYR2WiPWooUqg";
 //char preUrl[] = "POST https://www.googleapis.com/fusiontables/v1/query?sql=INSERT+INTO+1mMBO0mOoLxpg5Q2eQs3pqps-vSpLikZ78DoukHw+(Employee%2C+Time%2C+Weekday%2C+Date%2C+InOut)+VALUES+('Red+Shoes'%2C+'10%3A01'%2C+'FRI'%2C+'1%2F11%2F13'%2C+'IN')&key=";
 //char* json_string;
 
@@ -75,31 +78,31 @@ void setup() {
   lcd.print("Marble Sdn. Bhd.");
   lcd.setBacklight(WHITE);
     
-   if (!SD.begin(4)) {
-    lcd.clear();
-    lcd.setCursor(0,0);
-    lcd.print("No Sd card.");
-    delay(1500);
-    // don't do anything more:
-    return;
-    }
-    else{
-      if (!SD.exists("datalog.txt")) 
-      {
-        lcd.clear();
-        lcd.print("No File Found.");
-        delay(1500);
-        return;
-      }
-      else{
+//   if (!SD.begin(4)) {
+//    lcd.clear();
+//    lcd.setCursor(0,0);
+//    lcd.print("No Sd card.");
+//    delay(1500);
+//    // don't do anything more:
+//    return;
+//    }
+//    else{
+//      if (!SD.exists("datalog.txt")) 
+//      {
+//        lcd.clear();
+//        lcd.print("No File Found.");
+//        delay(1500);
+//        return;
+//      }
+//      else{
       nfc.begin();
       // configure board to read RFID tags
       nfc.SAMConfig();
       nfc.setPassiveActivationRetries(3);
       //  Serial.println("Waiting for an ISO14443A Card ...");
-      }
+//      }
        
-    }
+//    }
     
     beep(200);
     digitalWrite(6,HIGH);
@@ -109,22 +112,16 @@ void setup() {
     digitalWrite(7,LOW);
     
        
-//    if (Ethernet.begin(mac) == 0) {
-//    // no point in carrying on, so do nothing forevermore:
-//    while (1) {
-////      Serial.println("Failed to configure Ethernet using DHCP");
-//      delay(10000);
-//    }
-//  }
+    if (Ethernet.begin(mac) == 0) {
+    // no point in carrying on, so do nothing forevermore:
+    while (1) {
+//      Serial.println("Failed to configure Ethernet using DHCP");
+      delay(10000);
+    }
+  }
   
-//  if (client.connect(server,80)){
-//    
-//    client.print("POST https://www.googleapis.com/fusiontables/v1/query?sql=INSERT+INTO+1mMBO0mOoLxpg5Q2eQs3pqps-vSpLikZ78DoukHw+(Employee%2C+Time%2C+Weekday%2C+Date%2C+InOut)+VALUES+('Red+Shoes'%2C+'10%3A01'%2C+'FRI'%2C+'1%2F11%2F13'%2C+'IN')&key=");
-//    client.print(APIKey);
-//    client.println("");
-//    client.println("Authorization:  Bearer ya29.AHES6ZRdlCrsof9nwjEc1frgFO6Cem1oHgwZklRaV0UlCqI16sXRcg");
-//    client.println("X-JavaScript-User-Agent:  Google APIs Explorer");
-//  } 
+  delay(1000);
+ 
 //  Serial.print("IP number assigned by DHCP is ");
 //  Serial.println(Ethernet.localIP());
 //  Udp.begin(localPort);
@@ -295,48 +292,66 @@ void loop(){
 //        nfc.PrintHexChar(data2, 16);
 //          Serial.println("");
           
-   File dataFile = SD.open("datalog.txt", FILE_WRITE);
+//   File dataFile = SD.open("datalog.txt", FILE_WRITE);
+//        
+//   if (dataFile) {
+//        dataFile.print(dataString);
+//        dataFile.print("\t");
+//        
+//        dataFile.print(w);
+//        dataFile.print(":");
+//        dataFile.print(e);
+//        dataFile.print(":");
+//        dataFile.print(r);
+//        dataFile.print("\t");
+//        
+//        dataFile.print(dayShortStr(weekday()));
+//        dataFile.print("\t");
+//        
+//        dataFile.print(day());
+//        dataFile.print(monthShortStr(month()));
+//        dataFile.print(year());
+//        dataFile.print("\t");
+//        
+//        if(data2[0]=='I')
+//        {
+//          dataFile.println("IN");
+//        }
+//        else
+//        {
+//          dataFile.println("OUT");
+//        }
+//         
+//        
+//        dataFile.close();
+//        // print to the serial port too:
+//        // Serial.println(dataString);
+//        }  
+//        // if the file isn't open, pop up an error:
+//        else {
+//        // Serial.println("error opening datalog.txt");
+//        }
         
-   if (dataFile) {
-        dataFile.print(dataString);
-        dataFile.print("\t");
-        
-        dataFile.print(w);
-        dataFile.print(":");
-        dataFile.print(e);
-        dataFile.print(":");
-        dataFile.print(r);
-        dataFile.print("\t");
-        
-        dataFile.print(dayShortStr(weekday()));
-        dataFile.print("\t");
-        
-        dataFile.print(day());
-        dataFile.print(monthShortStr(month()));
-        dataFile.print(year());
-        dataFile.print("\t");
-        
-        if(data2[0]=='I')
+        if(client.connect(server,80))
         {
-          dataFile.println("IN");
+          
+          String time_(String(w)+":"+String(e)+":"+String(r));
+          String date_(String(day())+monthShortStr(month())+String(year()));
+          
+          if(data2[0]=='I')
+        {
+          push2drive(dataString,time_,dayShortStr(weekday()),date_,"IN");
         }
         else
         {
-          dataFile.println("OUT");
+           push2drive(dataString,time_,dayShortStr(weekday()),date_,"OUT");
         }
-         
-        
-        dataFile.close();
-        // print to the serial port too:
-        // Serial.println(dataString);
-        }  
-        // if the file isn't open, pop up an error:
-        else {
-        // Serial.println("error opening datalog.txt");
+           delay(1000);
+           client.stop();     
         }
           
           // Wait a bit before reading the card again
-         delay(1000);
+         
          closeAll();
          delay(1000);
          lcd.clear();
@@ -465,6 +480,20 @@ time_t requestSync()
 {
   Serial.write(TIME_REQUEST);  
   return 0; // the time will be sent later in response to serial mesg
+}
+
+void push2drive(String emplo,String time,String week, String date, String inout)
+{
+  String postID("GET /pushingbox?devid="+NFC_Id+"&emplo="+emplo+"&time="+time+"&week="+week+"&date="+date+"&inout="+inout+" HTTP/1.1");
+  
+  client.println(postID);
+  client.println("Host: api.pushingbox.com");
+  client.println("User-Agent: Arduino");
+  client.println("Content-Type: text/html; charset=utf-8; encoding=gzip");
+  client.println("Connection: close");
+  client.println();
+  
+  delay(10);
 }
 
 //
