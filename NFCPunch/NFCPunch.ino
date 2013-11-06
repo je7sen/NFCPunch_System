@@ -1,8 +1,5 @@
-
 #include <Ethernet.h>
 //#include <EthernetUdp.h>
-//#include <aJSON.h>
-
 #include <Time.h>  
 #include <Wire.h>
 #include <SPI.h>
@@ -43,12 +40,8 @@ String NFC_Id("vB9504FE1A766082");
 ////const int timeZone = +8; 
 EthernetClient client;
 //byte server[] = { 209, 85, 229, 101 };  //Google IP
-//char tableId[] = "1mMBO0mOoLxpg5Q2eQs3pqps-vSpLikZ78DoukHw";
-//char clientId[] = "337610643991.apps.googleusercontent.com";
-//char clientSecret[] = "v9yiiz_wz85zu7V2zCkRg63R";
-//char APIKey[] = "AIzaSyAqF3_FF9F4cVZ3TapsscuYR2WiPWooUqg";
-//char preUrl[] = "POST https://www.googleapis.com/fusiontables/v1/query?sql=INSERT+INTO+1mMBO0mOoLxpg5Q2eQs3pqps-vSpLikZ78DoukHw+(Employee%2C+Time%2C+Weekday%2C+Date%2C+InOut)+VALUES+('Red+Shoes'%2C+'10%3A01'%2C+'FRI'%2C+'1%2F11%2F13'%2C+'IN')&key=";
-//char* json_string;
+
+//File dataFile;
 
 //EthernetUDP Udp;
 //unsigned int localPort = 8888; 
@@ -112,13 +105,13 @@ void setup() {
     digitalWrite(7,LOW);
     
        
-    if (Ethernet.begin(mac) == 0) {
-    // no point in carrying on, so do nothing forevermore:
-    while (1) {
-//      Serial.println("Failed to configure Ethernet using DHCP");
-      delay(10000);
-    }
-  }
+//    if (Ethernet.begin(mac) == 0) {
+//    // no point in carrying on, so do nothing forevermore:
+//    while (1) {
+////      Serial.println("Failed to configure Ethernet using DHCP");
+//      delay(10000);
+//    }
+//  }
   
   delay(1000);
  
@@ -289,30 +282,20 @@ void loop(){
             }
             
         }
+        
+        String time_(String(w)+":"+String(e)+":"+String(r));
+        String date_(String(day())+monthShortStr(month())+String(year()));
 //        nfc.PrintHexChar(data2, 16);
 //          Serial.println("");
           
-//   File dataFile = SD.open("datalog.txt", FILE_WRITE);
+//   dataFile = SD.open("datalog.txt", FILE_WRITE);
 //        
 //   if (dataFile) {
-//        dataFile.print(dataString);
-//        dataFile.print("\t");
-//        
-//        dataFile.print(w);
-//        dataFile.print(":");
-//        dataFile.print(e);
-//        dataFile.print(":");
-//        dataFile.print(r);
-//        dataFile.print("\t");
-//        
-//        dataFile.print(dayShortStr(weekday()));
-//        dataFile.print("\t");
-//        
-//        dataFile.print(day());
-//        dataFile.print(monthShortStr(month()));
-//        dataFile.print(year());
-//        dataFile.print("\t");
-//        
+//        write2sd(dataString);
+//        write2sd(time_);
+//        write2sd(dayShortStr(weekday()));
+//        write2sd(date_);
+//
 //        if(data2[0]=='I')
 //        {
 //          dataFile.println("IN");
@@ -332,19 +315,16 @@ void loop(){
 //        // Serial.println("error opening datalog.txt");
 //        }
         
-        if(client.connect(server,80))
+       if(client.connect(server,80))
         {
-          
-          String time_(String(w)+":"+String(e)+":"+String(r));
-          String date_(String(day())+monthShortStr(month())+String(year()));
-          
+                             
           if(data2[0]=='I')
         {
           push2drive(dataString,time_,dayShortStr(weekday()),date_,"IN");
         }
         else
         {
-           push2drive(dataString,time_,dayShortStr(weekday()),date_,"OUT");
+          push2drive(dataString,time_,dayShortStr(weekday()),date_,"OUT");
         }
            delay(1000);
            client.stop();     
@@ -450,7 +430,7 @@ void processSyncMessage() {
 
 void beep(unsigned char delayms)
 {
-  analogWrite(5, 20);
+  analogWrite(5, 50);
   delay(delayms);
   analogWrite(5, 0);
   delay(delayms);
@@ -493,8 +473,14 @@ void push2drive(String emplo,String time,String week, String date, String inout)
   client.println("Connection: close");
   client.println();
   
-  delay(10);
+  delay(1);
 }
+
+//void write2sd(String value)
+//{
+//  dataFile.print(value);
+//  dataFile.print("\t");
+//}
 
 //
 ///*-------- NTP code ----------*/
