@@ -1,12 +1,13 @@
 #include <Ethernet.h>
 //#include <EthernetUdp.h>
-#include <Time.h>  
+//#include <Time.h>  
 #include <Wire.h>
 #include <SPI.h>
 //#include <SD.h>
 #include <Adafruit_MCP23017.h>
 #include <Adafruit_RGBLCDShield.h>
 #include <Adafruit_NFCShield_I2C.h>
+#include <TimeDS1302.h>
 
 // The shield uses the I2C SCL and SDA pins. On classic Arduinos
 // this is Analog 4 and 5 so you can't use those for analogRead() anymore
@@ -32,6 +33,12 @@ Adafruit_NFCShield_I2C nfc(IRQ, RESET);
 #define TIME_HEADER   'T'   // Header tag for serial time sync message
 #define TIME_REQUEST  7     // ASCII bell character requests a time sync message 
 
+#define PIN_SCLK 51
+#define PIN_IO 49
+#define PIN_CE 47
+
+TimeDS1302 clock(PIN_SCLK, PIN_IO, PIN_CE);
+
 byte mac[] = { 0x90, 0xA2, 0xDA, 0x0D, 0xB9, 0xDF }; 
 char server[] = "api.pushingbox.com";
 String NFC_Id("vB9504FE1A766082");
@@ -46,6 +53,10 @@ EthernetClient client;
 //EthernetUDP Udp;
 //unsigned int localPort = 8888; 
 
+uint8_t buttons;
+boolean SET = false;
+boolean stopclock = false;
+
 void setup() {
   
   Serial.begin(115200);
@@ -53,7 +64,10 @@ void setup() {
     ; // Needed for Leonardo only
   }
   
-  pinMode(9,OUTPUT);
+  pinMode(53,OUTPUT);
+  digitalWrite(53,HIGH);
+  clock.begin();
+  
   pinMode(4,OUTPUT);  //sd card
   pinMode(5,OUTPUT);  //buzzer
   pinMode(6,OUTPUT);  //green LED  
@@ -64,7 +78,7 @@ void setup() {
   // set up the LCD's number of columns and rows: 
   lcd.begin(16, 2);
        
-  setSyncProvider(requestSync);  //set function to call when sync required
+//  setSyncProvider(requestSync);  //set function to call when sync required
 //  Serial.println("Waiting for sync message");
   lcd.print("HL Granite and");
   lcd.setCursor(0,1);
@@ -114,7 +128,7 @@ void setup() {
 //  }
   
   delay(1000);
- 
+  lcd.clear();
 //  Serial.print("IP number assigned by DHCP is ");
 //  Serial.println(Ethernet.localIP());
 //  Udp.begin(localPort);
@@ -125,23 +139,27 @@ void setup() {
   
 }
 
-time_t prevDisplay = 0;
+//time_t prevDisplay = 0;
 
 void loop(){ 
   
+//  
+// if (Serial.available()) {
+//    
+//    char c = Serial.read();
+//    if( c == TIME_HEADER) {
+//      processSyncMessage();
+//    }
+//    lcd.clear();
+//  }
   
- if (Serial.available()) {
-    
-    char c = Serial.read();
-    if( c == TIME_HEADER) {
-      processSyncMessage();
-    }
-    lcd.clear();
-  }
+//  if (timeStatus()!= timeNotSet) {
+//    digitalClockDisplay();  
+//  }
+  if(!stopclock)
+  {
+    digitalClockDisplay();
   
-  if (timeStatus()!= timeNotSet) {
-    digitalClockDisplay();  
-  } 
   
 //  if (timeStatus() != timeNotSet) {
 //    if (now() != prevDisplay) { //update the display only if time has changed
@@ -210,9 +228,9 @@ void loop(){
         success = nfc.mifareclassic_ReadDataBlock(4, data);
         success = nfc.mifareclassic_ReadDataBlock(5, data1);
         success = nfc.mifareclassic_ReadDataBlock(6, data2);
-        w=hour();
-        e=minute();
-        r=second();
+        w=clock.getHour();
+        e=clock.getMinute();
+        r=clock.getSecond();
         uint8_t buff = data2[0];
         
         if(data2[0] == 'I')
@@ -284,7 +302,7 @@ void loop(){
         }
         
         String time_(String(w)+":"+String(e)+":"+String(r));
-        String date_(String(day())+monthShortStr(month())+String(year()));
+        String date_(String(clock.getDate())+clock.getMonth()+String(clock.getYear()));
 //        nfc.PrintHexChar(data2, 16);
 //          Serial.println("");
           
@@ -320,11 +338,11 @@ void loop(){
                              
           if(data2[0]=='I')
         {
-          push2drive(dataString,time_,dayShortStr(weekday()),date_,"IN");
+          push2drive(dataString,time_,clock.getWeek(),date_,"IN");
         }
         else
         {
-          push2drive(dataString,time_,dayShortStr(weekday()),date_,"OUT");
+          push2drive(dataString,time_,clock.getWeek(),date_,"OUT");
         }
            delay(1000);
            client.stop();     
@@ -355,56 +373,392 @@ void loop(){
     }
  
   }
+  }
   
-//  uint8_t buttons = lcd.readButtons();
+  
+//setting time manually  
+ buttons = lcd.readButtons();
     
-  //button function
-//  if (buttons) {
-//    lcd.clear();
-//    lcd.setCursor(0,0);
-//    if (buttons & BUTTON_UP) {
-//      lcd.print("UP ");
-//      lcd.setBacklight(RED);
-//    }
-//    if (buttons & BUTTON_DOWN) {
-//      lcd.print("DOWN ");
-//      lcd.setBacklight(YELLOW);
-//    }
-//    if (buttons & BUTTON_LEFT) {
-//      lcd.print("LEFT ");
-//      lcd.setBacklight(GREEN);
-//    }
-//    if (buttons & BUTTON_RIGHT) {
-//      lcd.print("RIGHT ");
-//      lcd.setBacklight(TEAL);
-//    }
-//    if (buttons & BUTTON_SELECT) {
-//      lcd.print("SELECT ");
-//      lcd.setBacklight(VIOLET);
-//    }
-//  }
- 
-  
-  
+  if (buttons) {
+    stopclock = true;
+    lcd.clear();
+    lcd.setCursor(0,0);
+    if (buttons & BUTTON_SELECT)
+    {
+      SET = true;
+      int setting=0;
+      int _sec=0,_min=0,_hour=0,_week=0,_date=0,_month=0,_year=2013;
+      while(SET)
+      {
+                
+        buttons = lcd.readButtons();
+               
+        if (buttons)
+        {
+                 
+          if(setting==0)
+          {
+            lcd.clear();
+            lcd.setCursor(0,0);
+            lcd.print("Year =");
+            lcd.setCursor(0,1);
+  if (buttons & BUTTON_UP)
+  {
+     _year=_year+1;
+     lcd.print(_year);
+     delay(800);
+   }
+   else if (buttons & BUTTON_DOWN)
+   {
+      _year=_year-1;
+      lcd.print(_year);
+      delay(800);
+    }
+    else if (buttons & BUTTON_LEFT)
+    {
+       setting=setting-1;
+       delay(800);
+     }
+     else if (buttons & BUTTON_RIGHT)
+     {
+        setting=setting+1;
+        delay(800);
+     }
+     else if (buttons & BUTTON_SELECT)
+     {
+         SET = false;
+         stopclock = false;
+                        
+     }
+          }
+          else if(setting==1)
+          {lcd.clear();
+            lcd.setCursor(0,0);
+            lcd.print("Month =");
+            lcd.setCursor(0,1);
+  if (buttons & BUTTON_UP)
+  {
+     _month=_month+1;
+     lcd.print(_month);
+     delay(800);
+   }
+   else if (buttons & BUTTON_DOWN)
+   {
+      _month=_month-1;
+      lcd.print(_month);
+      delay(800);
+    }
+    else if (buttons & BUTTON_LEFT)
+    {
+       setting=setting-1;
+       delay(800);
+     }
+     else if (buttons & BUTTON_RIGHT)
+     {
+        setting=setting+1;
+        delay(800);
+     }
+     else if (buttons & BUTTON_SELECT)
+     {
+         SET = false;
+         stopclock = false;
+                        
+     }
+          }
+          else if(setting==2)
+          { lcd.clear();
+            lcd.setCursor(0,0);
+            lcd.print("Day =");
+            lcd.setCursor(0,1);
+  if (buttons & BUTTON_UP)
+  {
+     _date=_date+1;
+     lcd.print(_date);
+     delay(800);
+   }
+   else if (buttons & BUTTON_DOWN)
+   {
+      _date=_date-1;
+      lcd.print(_date);
+      delay(800);
+    }
+    else if (buttons & BUTTON_LEFT)
+    {
+       setting=setting-1;
+       delay(800);
+     }
+     else if (buttons & BUTTON_RIGHT)
+     {
+        setting=setting+1;
+        delay(800);
+     }
+     else if (buttons & BUTTON_SELECT)
+     {
+         SET = false;
+         stopclock = false;
+                        
+     }
+          }
+          else if(setting==3)
+          {lcd.clear();
+             lcd.setCursor(0,0);
+            lcd.print("Weekday =");
+            lcd.setCursor(0,1);
+  if (buttons & BUTTON_UP)
+  {
+     _week=_week+1;
+     lcd.print(_week);
+     delay(800);
+   }
+   else if (buttons & BUTTON_DOWN)
+   {
+      _week=_week-1;
+      lcd.print(_week);
+      delay(800);
+    }
+    else if (buttons & BUTTON_LEFT)
+    {
+       setting=setting-1;
+       delay(800);
+     }
+     else if (buttons & BUTTON_RIGHT)
+     {
+        setting=setting+1;
+        delay(800);
+     }
+     else if (buttons & BUTTON_SELECT)
+     {
+         SET = false;
+         stopclock = false;
+                        
+     }
+          }
+          else if(setting==4)
+          { lcd.clear();
+            lcd.setCursor(0,0);
+            lcd.print("Hour =");
+            lcd.setCursor(0,1);
+  if (buttons & BUTTON_UP)
+  {
+     _hour=_hour+1;
+     lcd.print(_hour);
+     delay(800);
+   }
+   else if (buttons & BUTTON_DOWN)
+   {
+      _hour=_hour-1;
+      lcd.print(_hour);
+      delay(800);
+    }
+    else if (buttons & BUTTON_LEFT)
+    {
+       setting=setting-1;
+       delay(800);
+     }
+     else if (buttons & BUTTON_RIGHT)
+     {
+        setting=setting+1;
+        delay(800);
+     }
+     else if (buttons & BUTTON_SELECT)
+     {
+         SET = false;
+         stopclock = false;
+                        
+     }
+          }
+          else if(setting==5)
+          { lcd.clear();
+            lcd.setCursor(0,0);
+            lcd.print("Minute =");
+            lcd.setCursor(0,1);
+  if (buttons & BUTTON_UP)
+  {
+     _min=_min+1;
+     lcd.print(_min);
+     delay(800);
+   }
+   else if (buttons & BUTTON_DOWN)
+   {
+      _min=_min-1;
+      lcd.print(_min);
+      delay(800);
+    }
+    else if (buttons & BUTTON_LEFT)
+    {
+       setting=setting-1;
+       delay(800);
+     }
+     else if (buttons & BUTTON_RIGHT)
+     {
+        setting=setting+1;
+        delay(800);
+     }
+     else if (buttons & BUTTON_SELECT)
+     {
+         SET = false;
+         stopclock = false;
+                        
+     }
+          }
+          else if(setting==6)
+          { lcd.clear();
+            lcd.setCursor(0,0);
+            lcd.print("Second =");
+            lcd.setCursor(0,1);
+  if (buttons & BUTTON_UP)
+  {
+     _sec=_sec+1;
+     lcd.print(_sec);
+     delay(800);
+   }
+   else if (buttons & BUTTON_DOWN)
+   {
+      _sec=_sec-1;
+      lcd.print(_sec);
+      delay(800);
+    }
+    else if (buttons & BUTTON_LEFT)
+    {
+       setting=setting-1;
+       delay(800);
+     }
+     else if (buttons & BUTTON_RIGHT)
+     {
+        setting=setting+1;
+        delay(800);
+     }
+     else if (buttons & BUTTON_SELECT)
+     {
+         SET = false;
+         stopclock = false;
+         
+         //manually set time and date
+         //clock.set_time(_sec,_min,_hour,_week,_date,_month,_year);
+                        
+     }
+          }
+          
+          else if(setting>=8||setting<=-1)
+          {
+            setting=0;
+            
+          }
+          
+          switch(setting)
+        {
+          case 0:
+            lcd.clear();
+            lcd.setCursor(0,0);
+            lcd.print("Year =");
+            lcd.setCursor(0,1);
+            lcd.print(_year);
+            break;
+          case 1:
+            lcd.clear();
+            lcd.setCursor(0,0);
+            lcd.print("Month =");
+            lcd.setCursor(0,1);
+            lcd.print(_month);
+            break;
+           case 2:
+            lcd.clear();
+            lcd.setCursor(0,0);
+            lcd.print("Day =");
+            lcd.setCursor(0,1);
+            lcd.print(_date);
+            break;
+           case 3:
+            lcd.clear();
+            lcd.setCursor(0,0);
+            lcd.print("Weekday =");
+            lcd.setCursor(0,1);
+            lcd.print(_week);
+            break;
+           case 4:
+            lcd.clear();
+            lcd.setCursor(0,0);
+            lcd.print("Hour =");
+            lcd.setCursor(0,1);
+            lcd.print(_hour);
+            break;
+           case 5:
+            lcd.clear();
+            lcd.setCursor(0,0);
+            lcd.print("Minute =");
+            lcd.setCursor(0,1);
+            lcd.print(_min);
+            break;
+           case 6:
+            lcd.clear();
+            lcd.setCursor(0,0);
+            lcd.print("Second =");
+            lcd.setCursor(0,1);
+            lcd.print(_sec);
+            break;
+           default:
+           break;
+        }
+           
+        }
+        
+        }
+      }
+    }
+}
+
+void processbutton(int setting_,int type,String printout)
+{
+          
+  if (buttons & BUTTON_UP)
+  {
+     type=type+1;
+     lcd.print(type);
+     delay(800);
+   }
+   else if (buttons & BUTTON_DOWN)
+   {
+      type=type-1;
+      lcd.print(type);
+      delay(800);
+    }
+    else if (buttons & BUTTON_LEFT)
+    {
+       setting_=setting_-1;
+       delay(800);
+     }
+     else if (buttons & BUTTON_RIGHT)
+     {
+        setting_=setting_+1;
+        delay(800);
+     }
+     else if (buttons & BUTTON_SELECT)
+     {
+         SET = false;
+         stopclock = false;
+                        
+     }
+    
   
 }
 
+
 void digitalClockDisplay(){
   // digital clock display of the time
-  lcd.print(hour());
-  printDigits(minute());
-  printDigits(second());
+  lcd.print(clock.getHour());
+  printDigits(clock.getMinute());
+  printDigits(clock.getSecond());
   lcd.print(" ");
   
-  lcd.print(dayShortStr(weekday()));
+  lcd.print(clock.getWeek());
   lcd.print(" ");
   lcd.setCursor(0, 1);
-  lcd.print(day());
+  lcd.print(clock.getDate());
   lcd.print(" ");
   
-  lcd.print(monthShortStr(month()));
+  lcd.print(clock.getMonth());
   lcd.print(" ");
-  lcd.print(year()); 
+  lcd.print(clock.getYear()); 
   
 }
 
@@ -418,15 +772,15 @@ void printDigits(int digits){
 
 
 
-void processSyncMessage() {
-  unsigned long pctime;
-  const unsigned long DEFAULT_TIME = 1357041600; // Jan 1 2013 - paul, perhaps we define in time.h?
-
-   pctime = Serial.parseInt();
-   if( pctime >= DEFAULT_TIME) { // check the integer is a valid time (greater than Jan 1 2013)
-     setTime(pctime); // Sync Arduino clock to the time received on the serial port
-   } 
-}
+//void processSyncMessage() {
+//  unsigned long pctime;
+//  const unsigned long DEFAULT_TIME = 1357041600; // Jan 1 2013 - paul, perhaps we define in time.h?
+//
+//   pctime = Serial.parseInt();
+//   if( pctime >= DEFAULT_TIME) { // check the integer is a valid time (greater than Jan 1 2013)
+//     setTime(pctime); // Sync Arduino clock to the time received on the serial port
+//   } 
+//}
 
 void beep(unsigned char delayms)
 {
@@ -456,11 +810,11 @@ void closeAll()
   digitalWrite(7,LOW);
 }
 
-time_t requestSync()
-{
-  Serial.write(TIME_REQUEST);  
-  return 0; // the time will be sent later in response to serial mesg
-}
+//time_t requestSync()
+//{
+//  Serial.write(TIME_REQUEST);  
+//  return 0; // the time will be sent later in response to serial mesg
+//}
 
 void push2drive(String emplo,String time,String week, String date, String inout)
 {
