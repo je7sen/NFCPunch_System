@@ -56,6 +56,8 @@ EthernetClient client;
 uint8_t buttons;
 boolean SET = false;
 boolean stopclock = false;
+int setting=0;
+int _sec=0,_min=0,_hour=0,_week=0,_date=0,_month=0,_year=2013;
 
 void setup() {
   
@@ -386,8 +388,8 @@ void loop(){
     if (buttons & BUTTON_SELECT)
     {
       SET = true;
-      int setting=0;
-      int _sec=0,_min=0,_hour=0,_week=0,_date=0,_month=0,_year=2013;
+      
+      
       while(SET)
       {
                 
@@ -398,255 +400,74 @@ void loop(){
                  
           if(setting==0)
           {
-            lcd.clear();
-            lcd.setCursor(0,0);
-            lcd.print("Year =");
-            lcd.setCursor(0,1);
-  if (buttons & BUTTON_UP)
-  {
-     _year=_year+1;
-     lcd.print(_year);
-     delay(800);
-   }
-   else if (buttons & BUTTON_DOWN)
-   {
-      _year=_year-1;
-      lcd.print(_year);
-      delay(800);
-    }
-    else if (buttons & BUTTON_LEFT)
-    {
-       setting=setting-1;
-       delay(800);
-     }
-     else if (buttons & BUTTON_RIGHT)
-     {
-        setting=setting+1;
-        delay(800);
-     }
-     else if (buttons & BUTTON_SELECT)
-     {
-         SET = false;
-         stopclock = false;
-                        
-     }
+            _year=processbutton(buttons,_year,"Year =");
           }
           else if(setting==1)
-          {lcd.clear();
-            lcd.setCursor(0,0);
-            lcd.print("Month =");
-            lcd.setCursor(0,1);
-  if (buttons & BUTTON_UP)
-  {
-     _month=_month+1;
-     lcd.print(_month);
-     delay(800);
-   }
-   else if (buttons & BUTTON_DOWN)
-   {
-      _month=_month-1;
-      lcd.print(_month);
-      delay(800);
-    }
-    else if (buttons & BUTTON_LEFT)
-    {
-       setting=setting-1;
-       delay(800);
-     }
-     else if (buttons & BUTTON_RIGHT)
-     {
-        setting=setting+1;
-        delay(800);
-     }
-     else if (buttons & BUTTON_SELECT)
-     {
-         SET = false;
-         stopclock = false;
-                        
-     }
+          {
+            _month=processbutton(buttons,_month,"Month =");
           }
           else if(setting==2)
-          { lcd.clear();
-            lcd.setCursor(0,0);
-            lcd.print("Day =");
-            lcd.setCursor(0,1);
-  if (buttons & BUTTON_UP)
-  {
-     _date=_date+1;
-     lcd.print(_date);
-     delay(800);
-   }
-   else if (buttons & BUTTON_DOWN)
-   {
-      _date=_date-1;
-      lcd.print(_date);
-      delay(800);
-    }
-    else if (buttons & BUTTON_LEFT)
-    {
-       setting=setting-1;
-       delay(800);
-     }
-     else if (buttons & BUTTON_RIGHT)
-     {
-        setting=setting+1;
-        delay(800);
-     }
-     else if (buttons & BUTTON_SELECT)
-     {
-         SET = false;
-         stopclock = false;
-                        
-     }
+          { 
+            _date=processbutton(buttons,_date,"Day =");
           }
           else if(setting==3)
-          {lcd.clear();
-             lcd.setCursor(0,0);
-            lcd.print("Weekday =");
-            lcd.setCursor(0,1);
-  if (buttons & BUTTON_UP)
-  {
-     _week=_week+1;
-     lcd.print(_week);
-     delay(800);
-   }
-   else if (buttons & BUTTON_DOWN)
-   {
-      _week=_week-1;
-      lcd.print(_week);
-      delay(800);
-    }
-    else if (buttons & BUTTON_LEFT)
-    {
-       setting=setting-1;
-       delay(800);
-     }
-     else if (buttons & BUTTON_RIGHT)
-     {
-        setting=setting+1;
-        delay(800);
-     }
-     else if (buttons & BUTTON_SELECT)
-     {
-         SET = false;
-         stopclock = false;
-                        
-     }
+          {
+            _week=processbutton(buttons,_week,"Week =");
           }
           else if(setting==4)
-          { lcd.clear();
-            lcd.setCursor(0,0);
-            lcd.print("Hour =");
-            lcd.setCursor(0,1);
-  if (buttons & BUTTON_UP)
-  {
-     _hour=_hour+1;
-     lcd.print(_hour);
-     delay(800);
-   }
-   else if (buttons & BUTTON_DOWN)
-   {
-      _hour=_hour-1;
-      lcd.print(_hour);
-      delay(800);
-    }
-    else if (buttons & BUTTON_LEFT)
-    {
-       setting=setting-1;
-       delay(800);
-     }
-     else if (buttons & BUTTON_RIGHT)
-     {
-        setting=setting+1;
-        delay(800);
-     }
-     else if (buttons & BUTTON_SELECT)
-     {
-         SET = false;
-         stopclock = false;
-                        
-     }
+          { 
+            _hour=processbutton(buttons,_hour,"Hour =");
           }
           else if(setting==5)
-          { lcd.clear();
-            lcd.setCursor(0,0);
-            lcd.print("Minute =");
-            lcd.setCursor(0,1);
-  if (buttons & BUTTON_UP)
-  {
-     _min=_min+1;
-     lcd.print(_min);
-     delay(800);
-   }
-   else if (buttons & BUTTON_DOWN)
-   {
-      _min=_min-1;
-      lcd.print(_min);
-      delay(800);
-    }
-    else if (buttons & BUTTON_LEFT)
-    {
-       setting=setting-1;
-       delay(800);
-     }
-     else if (buttons & BUTTON_RIGHT)
-     {
-        setting=setting+1;
-        delay(800);
-     }
-     else if (buttons & BUTTON_SELECT)
-     {
-         SET = false;
-         stopclock = false;
-                        
-     }
+          { 
+            _min=processbutton(buttons,_min,"Minute =");
           }
           else if(setting==6)
-          { lcd.clear();
+          { 
+            lcd.clear();
             lcd.setCursor(0,0);
             lcd.print("Second =");
             lcd.setCursor(0,1);
-  if (buttons & BUTTON_UP)
-  {
-     _sec=_sec+1;
-     lcd.print(_sec);
-     delay(800);
-   }
-   else if (buttons & BUTTON_DOWN)
-   {
-      _sec=_sec-1;
-      lcd.print(_sec);
-      delay(800);
-    }
-    else if (buttons & BUTTON_LEFT)
-    {
-       setting=setting-1;
-       delay(800);
-     }
-     else if (buttons & BUTTON_RIGHT)
-     {
-        setting=setting+1;
-        delay(800);
-     }
-     else if (buttons & BUTTON_SELECT)
-     {
-         SET = false;
-         stopclock = false;
+            if (buttons & BUTTON_UP)
+            {
+               _sec=_sec+1;
+               lcd.print(_sec);
+               delay(100);
+            }
+            else if (buttons & BUTTON_DOWN)
+            {
+               _sec=_sec-1;
+               lcd.print(_sec);
+               delay(100);
+            }
+            else if (buttons & BUTTON_LEFT)
+            {
+               setting=setting-1;
+               delay(100);
+            }
+            else if (buttons & BUTTON_RIGHT)
+            {
+              setting=setting+1;
+              delay(100);
+            }
+            else if (buttons & BUTTON_SELECT)
+            {
+               SET = false;
+               stopclock = false;
+               lcd.clear();
          
-         //manually set time and date
-         //clock.set_time(_sec,_min,_hour,_week,_date,_month,_year);
-                        
-     }
+               //manually set time and date
+               clock.set_time(_sec,_min,_hour,_week,_date,_month,_year);
+            }
           }
-          
-          else if(setting>=8||setting<=-1)
+          else if(setting>=7||setting<=-1)
           {
             setting=0;
-            
+            delay(100);
           }
           
           switch(setting)
-        {
+          {
           case 0:
             lcd.clear();
             lcd.setCursor(0,0);
@@ -671,7 +492,7 @@ void loop(){
            case 3:
             lcd.clear();
             lcd.setCursor(0,0);
-            lcd.print("Weekday =");
+            lcd.print("Week =");
             lcd.setCursor(0,1);
             lcd.print(_week);
             break;
@@ -696,50 +517,56 @@ void loop(){
             lcd.setCursor(0,1);
             lcd.print(_sec);
             break;
-           default:
-           break;
+           
         }
            
         }
         
         }
+        
+        lcd.clear();
       }
     }
 }
 
-void processbutton(int setting_,int type,String printout)
+int processbutton(int but,int type,String printout)
 {
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print(printout);
+  lcd.setCursor(0,1);
           
-  if (buttons & BUTTON_UP)
+  if (but & BUTTON_UP)
   {
      type=type+1;
      lcd.print(type);
-     delay(800);
+     delay(100);
    }
-   else if (buttons & BUTTON_DOWN)
+   else if (but & BUTTON_DOWN)
    {
       type=type-1;
       lcd.print(type);
-      delay(800);
+      delay(100);
     }
-    else if (buttons & BUTTON_LEFT)
+    else if (but & BUTTON_LEFT)
     {
-       setting_=setting_-1;
-       delay(800);
+       setting=setting-1;
+       delay(100);
      }
-     else if (buttons & BUTTON_RIGHT)
+     else if (but & BUTTON_RIGHT)
      {
-        setting_=setting_+1;
-        delay(800);
+        setting=setting+1;
+        delay(100);
      }
-     else if (buttons & BUTTON_SELECT)
+     else if (but & BUTTON_SELECT)
      {
          SET = false;
          stopclock = false;
+         lcd.clear();
                         
      }
-    
-  
+     
+     return type;
 }
 
 
