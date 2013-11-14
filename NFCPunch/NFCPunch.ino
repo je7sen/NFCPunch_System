@@ -1,18 +1,23 @@
-#include <Ethernet.h>
+/*Include Library*/
+//-----------------------------------------------------------------------------------
 //#include <EthernetUdp.h>
 //#include <Time.h>  
 #include <Wire.h>
 #include <SPI.h>
-//#include <SD.h>
+#include <SD.h>
 #include <Adafruit_MCP23017.h>
 #include <Adafruit_RGBLCDShield.h>
 #include <Adafruit_NFCShield_I2C.h>
 #include <TimeDS1302.h>
+#include <Adafruit_CC3000.h>
+#include <ccspi.h>
+#include <string.h>
+#include "utility/debug.h"
+//-----------------------------------------------------------------------------------
 
-// The shield uses the I2C SCL and SDA pins. On classic Arduinos
-// this is Analog 4 and 5 so you can't use those for analogRead() anymore
-// However, you can connect other I2C sensors to the I2C bus and share
-// the I2C bus.
+
+/*Setting Up LCD*/
+//-----------------------------------------------------------------------------------
 Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
 
 // These #defines make it easy to set the backlight color
@@ -23,41 +28,73 @@ Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
 #define BLUE 0x4
 #define VIOLET 0x5
 #define WHITE 0x7
+//-----------------------------------------------------------------------------------
 
+
+/*Setting Up NFC*/
+//-----------------------------------------------------------------------------------
 #define IRQ   (2)
 #define RESET (3)  // Not connected by default on the NFC Shield
 
 Adafruit_NFCShield_I2C nfc(IRQ, RESET);
+//-----------------------------------------------------------------------------------
+ 
 
-// single character message tags
-#define TIME_HEADER   'T'   // Header tag for serial time sync message
-#define TIME_REQUEST  7     // ASCII bell character requests a time sync message 
-
-#define PIN_SCLK 51
+ /*Setting Up TimeDS1302*/
+ //-----------------------------------------------------------------------------------
+#define PIN_SCLK 46
 #define PIN_IO 49
 #define PIN_CE 47
 
 TimeDS1302 clock(PIN_SCLK, PIN_IO, PIN_CE);
+//-----------------------------------------------------------------------------------
 
-byte mac[] = { 0x90, 0xA2, 0xDA, 0x0D, 0xB9, 0xDF }; 
-char server[] = "api.pushingbox.com";
-String NFC_Id("vB9504FE1A766082");
 
-////IPAddress timeServer(132, 163, 4, 101);
-////const int timeZone = +8; 
-EthernetClient client;
+/*Setting Up WIFI*/
+//-----------------------------------------------------------------------------------
+#define ADAFRUIT_CC3000_IRQ   3
+#define ADAFRUIT_CC3000_VBAT  5
+#define ADAFRUIT_CC3000_CS    10
+
+Adafruit_CC3000 cc3000 = Adafruit_CC3000(ADAFRUIT_CC3000_CS, ADAFRUIT_CC3000_IRQ, ADAFRUIT_CC3000_VBAT, SPI_CLOCK_DIV2);
+                                         
+#define WLAN_SSID       "YOUR_SSID"           // cannot be longer than 32 characters!
+#define WLAN_PASS       "YOUR_PASS"
+
+#define WLAN_SECURITY   WLAN_SEC_WPA
+#define IDLE_TIMEOUT_MS  3000
+//-----------------------------------------------------------------------------------
+
+/*Setting Up Internet*/
+//-----------------------------------------------------------------------------------
+char server[] = "api.pushingbox.com";//213.186.33.19
+String NFC_Id("YOUR_ID");
+uint32_t ip;
+
+//IPAddress timeServer(132, 163, 4, 101);
+//const int timeZone = +8; 
+
 //byte server[] = { 209, 85, 229, 101 };  //Google IP
-
-//File dataFile;
 
 //EthernetUDP Udp;
 //unsigned int localPort = 8888; 
+//-----------------------------------------------------------------------------------
 
+
+/*Setting Up SD card*/
+//-----------------------------------------------------------------------------------
+File dataFile;
+//-----------------------------------------------------------------------------------
+
+
+/*Global Variable*/
+//-----------------------------------------------------------------------------------
 uint8_t buttons;
 boolean SET = false;
 boolean stopclock = false;
 int setting=0;
 int _sec=0,_min=0,_hour=0,_week=0,_date=0,_month=0,_year=2013;
+//-----------------------------------------------------------------------------------
 
 void setup() {
   
@@ -66,12 +103,12 @@ void setup() {
     ; // Needed for Leonardo only
   }
   
-  pinMode(53,OUTPUT);
-  digitalWrite(53,HIGH);
+  pinMode(48,OUTPUT);
+  digitalWrite(48,HIGH);
   clock.begin();
   
   pinMode(4,OUTPUT);  //sd card
-  pinMode(5,OUTPUT);  //buzzer
+  pinMode(8,OUTPUT);  //buzzer
   pinMode(6,OUTPUT);  //green LED  
   pinMode(7,OUTPUT);  //red LED
   
@@ -80,39 +117,40 @@ void setup() {
   // set up the LCD's number of columns and rows: 
   lcd.begin(16, 2);
        
-//  setSyncProvider(requestSync);  //set function to call when sync required
-//  Serial.println("Waiting for sync message");
+
   lcd.print("HL Granite and");
   lcd.setCursor(0,1);
   lcd.print("Marble Sdn. Bhd.");
   lcd.setBacklight(WHITE);
     
-//   if (!SD.begin(4)) {
-//    lcd.clear();
-//    lcd.setCursor(0,0);
-//    lcd.print("No Sd card.");
-//    delay(1500);
-//    // don't do anything more:
-//    return;
-//    }
-//    else{
-//      if (!SD.exists("datalog.txt")) 
-//      {
-//        lcd.clear();
-//        lcd.print("No File Found.");
-//        delay(1500);
-//        return;
-//      }
-//      else{
+  if (!SD.begin(4)) {
+    Serial.println("No SD Card");
+   lcd.clear();
+   lcd.setCursor(0,0);
+   lcd.print("No Sd card.");
+   delay(1500);
+   // don't do anything more:
+   return;
+   }
+   else{
+     if (!SD.exists("datalog.txt")) 
+     {
+       Serial.println("No File Found");
+       lcd.clear();
+       lcd.print("No File Found.");
+       delay(1500);
+       return;
+     }
+     else{
       nfc.begin();
       // configure board to read RFID tags
       nfc.SAMConfig();
       nfc.setPassiveActivationRetries(3);
-      //  Serial.println("Waiting for an ISO14443A Card ...");
-//      }
+     }
        
-//    }
+   }
     
+	//initialize buzzer & led
     beep(200);
     digitalWrite(6,HIGH);
     digitalWrite(7,HIGH);
@@ -120,113 +158,89 @@ void setup() {
     digitalWrite(6,LOW);
     digitalWrite(7,LOW);
     
-       
-//    if (Ethernet.begin(mac) == 0) {
-//    // no point in carrying on, so do nothing forevermore:
-//    while (1) {
-////      Serial.println("Failed to configure Ethernet using DHCP");
-//      delay(10000);
-//    }
-//  }
-  
-  delay(1000);
-  lcd.clear();
-//  Serial.print("IP number assigned by DHCP is ");
-//  Serial.println(Ethernet.localIP());
-//  Udp.begin(localPort);
-//  Serial.println("waiting for sync");
-//  setSyncProvider(getNtpTime);
+  //Setup Internet//
+    if(!cc3000.begin())
+    {
+      lcd.clear();
+      lcd.print("Could't Start");
+      while(1);
+    }
     
+    if (!cc3000.connectToAP(WLAN_SSID, WLAN_PASS, WLAN_SECURITY))
+    {
+      lcd.clear();
+      lcd.print("Could't Connect");
+      while(1);
+    }
+    
+    while(!cc3000.checkDHCP())
+    {
+      delay(100);
+    }
+    
+  Serial.println("Connected to Internet");
+  
+  if (! cc3000.getHostByName(server, &ip)) {
+      Serial.println(F("Couldn't resolve!"));
+    }
+    cc3000.printIPdotsRev(ip);
+  delay(1000);
+  lcd.clear();    
  
   
 }
 
-//time_t prevDisplay = 0;
 
 void loop(){ 
   
-//  
-// if (Serial.available()) {
-//    
-//    char c = Serial.read();
-//    if( c == TIME_HEADER) {
-//      processSyncMessage();
-//    }
-//    lcd.clear();
-//  }
-  
-//  if (timeStatus()!= timeNotSet) {
-//    digitalClockDisplay();  
-//  }
+
   if(!stopclock)
   {
-    digitalClockDisplay();
+    digitalClockDisplay(); //display clock on LCD
   
-  
-//  if (timeStatus() != timeNotSet) {
-//    if (now() != prevDisplay) { //update the display only if time has changed
-//      prevDisplay = now();
-//      digitalClockDisplay();  
-//    }
-//  }
-  
-  
+   
   uint8_t success;
   uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 };  // Buffer to store the returned UID
   uint8_t uidLength;                        // Length of the UID (4 or 7 bytes depending on ISO14443A card type)
     
-  // Wait for an ISO14443A type cards (Mifare, etc.).  When one is found
-  // 'uid' will be populated with the UID, and uidLength will indicate
-  // if the uid is 4 bytes (Mifare Classic) or 7 bytes (Mifare Ultralight)
-   
+  
+  //waiting for a tag 
   success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength);
   
-  
-// set the cursor to column 0, line 1
-  // (note: line 1 is the second row, since counting begins with 0):
+
   lcd.setCursor(0, 0);
-  // print the number of seconds since reset:
-  
-  
+ 
   
   if (success) {
-    // Display some basic information about the card
-//    Serial.println("Found an ISO14443A card");
-//    Serial.print("  UID Length: ");Serial.print(uidLength, DEC);Serial.println(" bytes");
-//    Serial.print("  UID Value: ");
-//    nfc.PrintHex(uid, uidLength);
-//    Serial.println("");
     
     if (uidLength == 4)
     {
-      // We probably have a Mifare Classic card ... 
-//      Serial.println("Seems to be a Mifare Classic card (4 byte UID)");
-	  
+          
       // Now we need to try to authenticate it for read/write access
-      // Try with the factory default KeyA: 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF
-//      Serial.println("Trying to authenticate block 4 with default KEYA value");
-      uint8_t keya[6] = { 0xD3, 0xF7, 0xD3, 0xF7, 0xD3, 0xF7 };
-	  
-	  // Start with block 4 (the first block of sector 1) since sector 0
-	  // contains the manufacturer data and it's probably better just
-	  // to leave it alone unless you know what you're doing
-      success = nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 0, keya);
-	  
+      // default KeyA: 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+	  // default KeyB: 0xD3, 0xF7, 0xD3, 0xF7, 0xD3, 0xF7
+      uint8_t keyb[6] = { 0xD3, 0xF7, 0xD3, 0xF7, 0xD3, 0xF7 };
+          
+      // Start with block 4 (the first block of sector 1) since sector 0
+      // contains the manufacturer data and it's probably better just
+      // to leave it alone unless you know what you're doing
+      success = nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 0, keyb);
+          
       if (success)
       {
-//        Serial.println("Sector 1 (Blocks 4..7) has been authenticated");
+
         uint8_t data[16];
         uint8_t data1[16];
         uint8_t data2[16];
         uint8_t w,e,r;
-	String dataString = "";
-	
+        String dataString = "";
+        
         // If you want to write something to block 4 to test with, uncomment
-		// the following line and this text should be read back in a minute
-//         data = { 'a', 'd', 'a', 'f', 'r', 'u', 'i', 't', '.', 'c', 'o', 'm', 0, 0, 0, 0};
-//         success = nfc.mifareclassic_WriteDataBlock (4, data);
+        // the following line and this text should be read back in a minute
+		// data = { 'a', 'd', 'a', 'f', 'r', 'u', 'i', 't', '.', 'c', 'o', 'm', 0, 0, 0, 0};
+		// success = nfc.mifareclassic_WriteDataBlock (4, data);
 
-        // Try to read the contents of block 4
+        // Try to read the contents of block 4,5 & 6
         success = nfc.mifareclassic_ReadDataBlock(4, data);
         success = nfc.mifareclassic_ReadDataBlock(5, data1);
         success = nfc.mifareclassic_ReadDataBlock(6, data2);
@@ -235,6 +249,7 @@ void loop(){
         r=clock.getSecond();
         uint8_t buff = data2[0];
         
+		//write IN/OUT to NFC tag in block 6
         if(data2[0] == 'I')
         {
           uint8_t inout[16]={'O','U','T',0,0,0,0,0,0,0,0,0,0,0,0,0};
@@ -246,25 +261,25 @@ void loop(){
           nfc.mifareclassic_WriteDataBlock (6, inout);
         }
         
-        nfc.mifareclassic_ReadDataBlock(6, data2);	
-	
+		//reread block 6 to make sure IN/OUT written
+        nfc.mifareclassic_ReadDataBlock(6, data2);        
+        
+		
+		//compare the value to check whether written or not
+		//then display the name of employees
         if (buff != data2[0])
         {
           digitalWrite(7,LOW);
           greenLed();
           lcd.clear();
-          // Data seems to have been read ... spit it out
-//          Serial.println("Reading Block 4:");
-//          nfc.PrintHexChar(data, 16);
-//          Serial.println("");
+		
+		  //print the name to LCD
           for(uint8_t y=0; y<5; y++)
           {
           lcd.print((char)data[11+y]);
           dataString += String((char)data[11+y]);
           }
-//          nfc.PrintHexChar(data1, 16);
-//          Serial.println("");
-          
+        
                   
          for(uint8_t y=0; y<16; y++)
           {
@@ -280,15 +295,16 @@ void loop(){
             }
             
         }
-        lcd.setCursor(0,1);
+		
+		lcd.setCursor(0,1);
         
+		//print time on LCD
         lcd.print(w);
         printDigits(e);
         printDigits(r);
         lcd.print(' ');
-        lcd.print(' ');
-        lcd.print(' ');
-        
+
+        //print IN/OUT to LCD
         for(uint8_t y=0; y<16; y++)
           {
                        
@@ -303,42 +319,40 @@ void loop(){
             
         }
         
-        String time_(String(w)+":"+String(e)+":"+String(r));
-        String date_(String(clock.getDate())+clock.getMonth()+String(clock.getYear()));
-//        nfc.PrintHexChar(data2, 16);
-//          Serial.println("");
+        String time_((String)w+":"+(String)e+":"+(String)r);
+        String date_((String)clock.getDate()+clock.getMonth()+(String)clock.getYear());
+        String filename(date_+".txt");
+        char filename_1[12];
+        filename.toCharArray(filename_1,12);
+        const char *filename_2=filename_1;
           
-//   dataFile = SD.open("datalog.txt", FILE_WRITE);
-//        
-//   if (dataFile) {
-//        write2sd(dataString);
-//        write2sd(time_);
-//        write2sd(dayShortStr(weekday()));
-//        write2sd(date_);
-//
-//        if(data2[0]=='I')
-//        {
-//          dataFile.println("IN");
-//        }
-//        else
-//        {
-//          dataFile.println("OUT");
-//        }
-//         
-//        
-//        dataFile.close();
-//        // print to the serial port too:
-//        // Serial.println(dataString);
-//        }  
-//        // if the file isn't open, pop up an error:
-//        else {
-//        // Serial.println("error opening datalog.txt");
-//        }
-        
-       if(client.connect(server,80))
-        {
-                             
-          if(data2[0]=='I')
+	dataFile = SD.open(filename_2, FILE_WRITE);
+ 
+       if(dataFile){
+       write2sd(dataString);
+       write2sd(time_);
+       write2sd(clock.getWeek());
+       write2sd(date_);
+
+       if(data2[0]=='I')
+       {
+         dataFile.println("IN");
+       }
+       else
+       {
+         dataFile.println("OUT");
+       }
+
+       dataFile.close();
+
+       }  
+       else
+       {
+         Serial.println("Could't write to SD");
+       }
+
+       //write to Google SpreadSheet
+        if(data2[0]=='I')
         {
           push2drive(dataString,time_,clock.getWeek(),date_,"IN");
         }
@@ -346,9 +360,7 @@ void loop(){
         {
           push2drive(dataString,time_,clock.getWeek(),date_,"OUT");
         }
-           delay(1000);
-           client.stop();     
-        }
+         
           
           // Wait a bit before reading the card again
          
@@ -365,29 +377,30 @@ void loop(){
           lcd.print("  Punch Again!");
           delay(500);
           lcd.setCursor(0,0);
-//          Serial.println("Ooops ... unable to read the requested block.  Try another key?");
+
         }
       }
-      else
-      {
-//        Serial.println("Ooops ... authentication failed: Try another key?");
-      }
+
     }
  
   }
   }
   
   
-//setting time manually  
+/*etting time manually*/
+//read button press
  buttons = lcd.readButtons();
     
   if (buttons) {
     stopclock = true;
     lcd.clear();
     lcd.setCursor(0,0);
+	
+	//if button SELECT pressed?
     if (buttons & BUTTON_SELECT)
     {
-      SET = true;
+	  //to close the time display and card punch function
+      SET = true; 
       
       
       while(SET)
@@ -422,25 +435,22 @@ void loop(){
           { 
             _min=processbutton(buttons,_min,"Minute =");
           }
-          else if(setting==6)
+		  else if(setting==6)
+		  {
+			_sec=processbutton(buttons,_sec,"Second =");
+		  }
+          else if(setting==7)
           { 
+            String time_week((String)_hour+":"+(String)_min+":"+(String)_sec+"   "+(String)_week);
+	    String date_1((String)_date+_month+(String)_year);
+		  
             lcd.clear();
             lcd.setCursor(0,0);
-            lcd.print("Second =");
+            lcd.print(time_week);
             lcd.setCursor(0,1);
-            if (buttons & BUTTON_UP)
-            {
-               _sec=_sec+1;
-               lcd.print(_sec);
-               delay(100);
-            }
-            else if (buttons & BUTTON_DOWN)
-            {
-               _sec=_sec-1;
-               lcd.print(_sec);
-               delay(100);
-            }
-            else if (buttons & BUTTON_LEFT)
+	    lcd.print(date_1);
+            
+            if (buttons & BUTTON_LEFT)
             {
                setting=setting-1;
                delay(100);
@@ -460,11 +470,14 @@ void loop(){
                clock.set_time(_sec,_min,_hour,_week,_date,_month,_year);
             }
           }
-          else if(setting>=7||setting<=-1)
+          else if(setting>7||setting<=-1)
           {
             setting=0;
             delay(100);
           }
+          
+          String time_2((String)_hour+":"+(String)_min+":"+(String)_sec+"   "+(String)_week);
+	  String date_2((String)_date+_month+(String)_year);
           
           switch(setting)
           {
@@ -517,6 +530,13 @@ void loop(){
             lcd.setCursor(0,1);
             lcd.print(_sec);
             break;
+           case 7:
+            lcd.clear();
+            lcd.setCursor(0,0);
+            lcd.print(time_2);
+            lcd.setCursor(0,1);
+	    lcd.print(date_2);
+            break;
            
         }
            
@@ -529,6 +549,11 @@ void loop(){
     }
 }
 
+
+
+/*Application Level*/
+/*process button*/
+//----------------------------------------------------------
 int processbutton(int but,int type,String printout)
 {
   lcd.clear();
@@ -568,8 +593,9 @@ int processbutton(int but,int type,String printout)
      
      return type;
 }
+//----------------------------------------------------------
 
-
+/*display clock*/
 void digitalClockDisplay(){
   // digital clock display of the time
   lcd.print(clock.getHour());
@@ -597,73 +623,84 @@ void printDigits(int digits){
   lcd.print(digits);
 }
 
+//----------------------------------------------------------
 
-
-//void processSyncMessage() {
-//  unsigned long pctime;
-//  const unsigned long DEFAULT_TIME = 1357041600; // Jan 1 2013 - paul, perhaps we define in time.h?
-//
-//   pctime = Serial.parseInt();
-//   if( pctime >= DEFAULT_TIME) { // check the integer is a valid time (greater than Jan 1 2013)
-//     setTime(pctime); // Sync Arduino clock to the time received on the serial port
-//   } 
-//}
-
+/*ring the buzzer*/
+//----------------------------------------------------------
 void beep(unsigned char delayms)
 {
-  analogWrite(5, 50);
+  analogWrite(8, 50);
   delay(delayms);
-  analogWrite(5, 0);
+  analogWrite(8, 0);
   delay(delayms);
 }
+//----------------------------------------------------------
 
+/*light red LED*/
+//----------------------------------------------------------
 void redLed()
 {
   digitalWrite(7,HIGH);
   
 }
+//----------------------------------------------------------
 
+/*light green LED*/
+//----------------------------------------------------------
 void greenLed()
 {
   digitalWrite(6,HIGH);
   beep(200);
-//  digitalWrite(5,HIGH);
 }
+//----------------------------------------------------------
 
+/*Close all LED and Buzzer*/
+//----------------------------------------------------------
 void closeAll()
 {
-  digitalWrite(5,LOW);
+  digitalWrite(8,LOW);
   digitalWrite(6,LOW);
   digitalWrite(7,LOW);
 }
+//----------------------------------------------------------
 
-//time_t requestSync()
-//{
-//  Serial.write(TIME_REQUEST);  
-//  return 0; // the time will be sent later in response to serial mesg
-//}
-
+/*Write to Google SpreadSheet*/
+//----------------------------------------------------------
 void push2drive(String emplo,String time,String week, String date, String inout)
 {
-  String postID("GET /pushingbox?devid="+NFC_Id+"&emplo="+emplo+"&time="+time+"&week="+week+"&date="+date+"&inout="+inout+" HTTP/1.1");
+  String website("/pushingbox?devid="+NFC_Id+"&emplo="+emplo+"&time="+time+"&week="+week+"&date="+date+"&inout="+inout);
+  char POSTID[website.length()+1];
+  website.toCharArray(POSTID,website.length()+1);
   
-  client.println(postID);
-  client.println("Host: api.pushingbox.com");
-  client.println("User-Agent: Arduino");
-  client.println("Content-Type: text/html; charset=utf-8; encoding=gzip");
-  client.println("Connection: close");
-  client.println();
-  
+  Adafruit_CC3000_Client client = cc3000.connectTCP(ip, 80);
+  if (client.connected()) {
+    client.fastrprint(F("GET "));
+    client.fastrprint(POSTID);
+    client.fastrprint(F(" HTTP/1.1\r\n"));
+    client.fastrprint(F("Host: api.pushingbox.com\r\n"));
+    client.fastrprint(F("User-Agent: Arduino\r\n"));
+    client.fastrprint(F("Content-Type: text/html; charset=utf-8; encoding=gzip\r\n"));
+    client.fastrprint(F("Connection: close\r\n"));
+    client.fastrprint(F("\r\n"));
+    client.println();
+  } 
+  if (client.available()) {
+        char c = client.read();
+        Serial.write(c);}
   delay(1);
 }
+//----------------------------------------------------------
 
-//void write2sd(String value)
-//{
-//  dataFile.print(value);
-//  dataFile.print("\t");
-//}
+/*Write to SD card*/
+//----------------------------------------------------------
+void write2sd(String value)
+{
+ dataFile.print(value);
+ dataFile.print("\t");
+}
+//----------------------------------------------------------
 
-//
+
 ///*-------- NTP code ----------*/
 //
 //const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
@@ -715,4 +752,3 @@ void push2drive(String emplo,String time,String week, String date, String inout)
 //  Udp.write(packetBuffer, NTP_PACKET_SIZE);
 //  Udp.endPacket();
 //}
-

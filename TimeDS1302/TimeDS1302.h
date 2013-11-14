@@ -244,8 +244,8 @@ int getSecond(void);
 int getMinute(void);
 int getHour(void);
 int getDate(void);
-String getWeek(void);
-String getMonth(void);
+const char* getWeek(void);
+const char* getMonth(void);
 int getYear(void);
 
 private:

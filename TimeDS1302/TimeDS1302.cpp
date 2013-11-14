@@ -133,14 +133,14 @@ int TimeDS1302::getDate()
 }
 
 // Return Weekday of the month
-String TimeDS1302::getWeek()
+const char* TimeDS1302::getWeek()
 {	
 	ds1302_struct rtc;
 	TimeDS1302::DS1302_clock_burst_read( (uint8_t *) &rtc);
 	
-	int weekday = rtc.Day;
-	String weekDay;
-	switch(weekday)
+	int weekday_t = rtc.Day;
+	const char* weekDay;
+	switch(weekday_t)
 	{
 		case 1:
 			weekDay = "MON";
@@ -176,13 +176,13 @@ String TimeDS1302::getWeek()
 }
 
 //Return Month of the year
-String TimeDS1302::getMonth()
+const char* TimeDS1302::getMonth()
 {
 	ds1302_struct rtc;
 	TimeDS1302::DS1302_clock_burst_read( (uint8_t *) &rtc);
 	
 	int month_t = bcd2bin( rtc.Month10, rtc.Month);
-	String Month;
+	const char* Month;
 	switch(month_t)
 	{
 		case 1:
