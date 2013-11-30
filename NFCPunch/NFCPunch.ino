@@ -1,7 +1,6 @@
+//----------------------------------------------------------------------------------- 
 /*Include Library*/
-//-----------------------------------------------------------------------------------
-//#include <EthernetUdp.h>
-//#include <Time.h>  
+//-----------------------------------------------------------------------------------  
 #include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
@@ -15,7 +14,7 @@
 #include "utility/debug.h"
 //-----------------------------------------------------------------------------------
 
-
+//----------------------------------------------------------------------------------- 
 /*Setting Up LCD*/
 //-----------------------------------------------------------------------------------
 Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
@@ -30,7 +29,7 @@ Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
 #define WHITE 0x7
 //-----------------------------------------------------------------------------------
 
-
+//----------------------------------------------------------------------------------- 
 /*Setting Up NFC*/
 //-----------------------------------------------------------------------------------
 #define IRQ   (2)
@@ -39,7 +38,7 @@ Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
 Adafruit_NFCShield_I2C nfc(IRQ, RESET);
 //-----------------------------------------------------------------------------------
  
-
+//----------------------------------------------------------------------------------- 
  /*Setting Up TimeDS1302*/
  //-----------------------------------------------------------------------------------
 #define PIN_SCLK 46
@@ -49,7 +48,7 @@ Adafruit_NFCShield_I2C nfc(IRQ, RESET);
 TimeDS1302 clock(PIN_SCLK, PIN_IO, PIN_CE);
 //-----------------------------------------------------------------------------------
 
-
+//----------------------------------------------------------------------------------- 
 /*Setting Up WIFI*/
 //-----------------------------------------------------------------------------------
 #define ADAFRUIT_CC3000_IRQ   3
@@ -58,42 +57,39 @@ TimeDS1302 clock(PIN_SCLK, PIN_IO, PIN_CE);
 
 Adafruit_CC3000 cc3000 = Adafruit_CC3000(ADAFRUIT_CC3000_CS, ADAFRUIT_CC3000_IRQ, ADAFRUIT_CC3000_VBAT, SPI_CLOCK_DIV2);
                                          
-#define WLAN_SSID       "YOUR_SSID"           // cannot be longer than 32 characters!
-#define WLAN_PASS       "YOUR_PASS"
+#define WLAN_SSID       "wqy7377"           // cannot be longer than 32 characters!
+#define WLAN_PASS       "Yap0164100411"
 
 #define WLAN_SECURITY   WLAN_SEC_WPA
 #define IDLE_TIMEOUT_MS  3000
 //-----------------------------------------------------------------------------------
 
+
+//----------------------------------------------------------------------------------- 
 /*Setting Up Internet*/
 //-----------------------------------------------------------------------------------
 char server[] = "api.pushingbox.com";//213.186.33.19
-String NFC_Id("YOUR_ID");
-uint32_t ip;
-
-//IPAddress timeServer(132, 163, 4, 101);
-//const int timeZone = +8; 
-
-//byte server[] = { 209, 85, 229, 101 };  //Google IP
-
-//EthernetUDP Udp;
-//unsigned int localPort = 8888; 
+String NFC_Id("vB9504FE1A766082");
+char timeServer[] = "time.is";
+Adafruit_CC3000_Client client;
 //-----------------------------------------------------------------------------------
 
-
+//----------------------------------------------------------------------------------- 
 /*Setting Up SD card*/
 //-----------------------------------------------------------------------------------
 File dataFile;
 //-----------------------------------------------------------------------------------
 
-
+//----------------------------------------------------------------------------------- 
 /*Global Variable*/
 //-----------------------------------------------------------------------------------
 uint8_t buttons;
+uint32_t ip;
 boolean SET = false;
 boolean stopclock = false;
 int setting=0;
 int _sec=0,_min=0,_hour=0,_week=0,_date=0,_month=0,_year=2013;
+String timeString;
 //-----------------------------------------------------------------------------------
 
 void setup() {
@@ -133,7 +129,7 @@ void setup() {
    return;
    }
    else{
-     if (!SD.exists("datalog.txt")) 
+     if (!SD.exists("secure")) 
      {
        Serial.println("No File Found");
        lcd.clear();
@@ -150,7 +146,7 @@ void setup() {
        
    }
     
-	//initialize buzzer & led
+    //initialize buzzer & led
     beep(200);
     digitalWrite(6,HIGH);
     digitalWrite(7,HIGH);
@@ -158,7 +154,7 @@ void setup() {
     digitalWrite(6,LOW);
     digitalWrite(7,LOW);
     
-  //Setup Internet//
+    //Setup Internet//
     if(!cc3000.begin())
     {
       lcd.clear();
@@ -180,10 +176,11 @@ void setup() {
     
   Serial.println("Connected to Internet");
   
-  if (! cc3000.getHostByName(server, &ip)) {
-      Serial.println(F("Couldn't resolve!"));
-    }
-    cc3000.printIPdotsRev(ip);
+  if(getOnlineTime(&timeString))
+  {
+    getOnlineTimeToInt(timeString);
+  }
+   
   delay(1000);
   lcd.clear();    
  
@@ -237,8 +234,8 @@ void loop(){
         
         // If you want to write something to block 4 to test with, uncomment
         // the following line and this text should be read back in a minute
-		// data = { 'a', 'd', 'a', 'f', 'r', 'u', 'i', 't', '.', 'c', 'o', 'm', 0, 0, 0, 0};
-		// success = nfc.mifareclassic_WriteDataBlock (4, data);
+	// data = { 'a', 'd', 'a', 'f', 'r', 'u', 'i', 't', '.', 'c', 'o', 'm', 0, 0, 0, 0};
+	// success = nfc.mifareclassic_WriteDataBlock (4, data);
 
         // Try to read the contents of block 4,5 & 6
         success = nfc.mifareclassic_ReadDataBlock(4, data);
@@ -249,7 +246,7 @@ void loop(){
         r=clock.getSecond();
         uint8_t buff = data2[0];
         
-		//write IN/OUT to NFC tag in block 6
+	//write IN/OUT to NFC tag in block 6
         if(data2[0] == 'I')
         {
           uint8_t inout[16]={'O','U','T',0,0,0,0,0,0,0,0,0,0,0,0,0};
@@ -261,19 +258,19 @@ void loop(){
           nfc.mifareclassic_WriteDataBlock (6, inout);
         }
         
-		//reread block 6 to make sure IN/OUT written
+	//reread block 6 to make sure IN/OUT written
         nfc.mifareclassic_ReadDataBlock(6, data2);        
         
 		
-		//compare the value to check whether written or not
-		//then display the name of employees
+	//compare the value to check whether written or not
+	//then display the name of employees
         if (buff != data2[0])
         {
           digitalWrite(7,LOW);
           greenLed();
           lcd.clear();
 		
-		  //print the name to LCD
+          //print the name to LCD
           for(uint8_t y=0; y<5; y++)
           {
           lcd.print((char)data[11+y]);
@@ -296,9 +293,9 @@ void loop(){
             
         }
 		
-		lcd.setCursor(0,1);
+	lcd.setCursor(0,1);
         
-		//print time on LCD
+	//print time on LCD
         lcd.print(w);
         printDigits(e);
         printDigits(r);
@@ -321,12 +318,12 @@ void loop(){
         
         String time_((String)w+":"+(String)e+":"+(String)r);
         String date_((String)clock.getDate()+clock.getMonth()+(String)clock.getYear());
-        String filename(date_+".txt");
-        char filename_1[12];
-        filename.toCharArray(filename_1,12);
-        const char *filename_2=filename_1;
+        String monthfileName(clock.getMonth()+(String)clock.getYear());
+        String filename(monthfileName+".txt");
+        char filename_1[filename.length()+1];
+        filename.toCharArray(filename_1,filename.length()+1);
           
-	dataFile = SD.open(filename_2, FILE_WRITE);
+	dataFile = SD.open(filename_1, FILE_WRITE);
  
        if(dataFile){
        write2sd(dataString);
@@ -387,7 +384,7 @@ void loop(){
   }
   
   
-/*etting time manually*/
+/*setting time manually*/
 //read button press
  buttons = lcd.readButtons();
     
@@ -396,10 +393,10 @@ void loop(){
     lcd.clear();
     lcd.setCursor(0,0);
 	
-	//if button SELECT pressed?
+    //if button SELECT pressed?
     if (buttons & BUTTON_SELECT)
     {
-	  //to close the time display and card punch function
+      //to close the time display and card punch function
       SET = true; 
       
       
@@ -435,10 +432,10 @@ void loop(){
           { 
             _min=processbutton(buttons,_min,"Minute =");
           }
-		  else if(setting==6)
-		  {
-			_sec=processbutton(buttons,_sec,"Second =");
-		  }
+	 else if(setting==6)
+	 {
+	    _sec=processbutton(buttons,_sec,"Second =");
+	  }
           else if(setting==7)
           { 
             String time_week((String)_hour+":"+(String)_min+":"+(String)_sec+"   "+(String)_week);
@@ -550,8 +547,223 @@ void loop(){
 }
 
 
-
+//----------------------------------------------------------
 /*Application Level*/
+//----------------------------------------------------------
+/*Get Online time*/
+//----------------------------------------------------------
+String getTimeString(char dd[],int a, int b)
+{
+  String d="";
+  for(a;a<b+1;a++)
+  {
+    d += dd[a];
+  }
+  return d;
+}
+
+int getweekdayInt(String weekdayStr)
+{
+  int wdInt = 0;
+  
+    if(weekdayStr == "Mon")
+    {
+      wdInt = 1;
+    }
+    else if(weekdayStr == "Tue")
+    {
+      wdInt = 2;
+    }
+    else if(weekdayStr == "Wed")
+    {
+      wdInt = 3;
+    }
+    else if(weekdayStr == "Thr")
+    {
+      wdInt = 4;
+    }
+    else if(weekdayStr == "Fri")
+    {
+      wdInt = 5;
+    }
+    else if(weekdayStr == "Sat")
+    {
+      wdInt = 6;
+    }
+    else if(weekdayStr == "Sun")
+    {
+      wdInt = 7;
+    }
+  return wdInt;
+}
+
+int getmonthInt(String monthStr)
+{
+  int mInt = 0;
+  if(monthStr == "Jan")
+  {
+      mInt = 1;
+  }
+  else if(monthStr == "Feb")
+  {
+      mInt = 2;
+  }
+  else if(monthStr == "Mac")
+  {
+      mInt = 3;
+  }
+  else if(monthStr == "Apr")
+  {
+      mInt = 4;
+  }
+  else if(monthStr == "May")
+  {
+      mInt = 5;
+  }
+  else if(monthStr == "Jun")
+  {
+      mInt = 6;
+  }
+  else if(monthStr == "Jul")
+  {
+      mInt = 7;
+  }
+  else if(monthStr == "Aug")
+  {
+      mInt = 8;
+  }
+  else if(monthStr == "Sep")
+  {
+      mInt = 9;
+  }
+  else if(monthStr == "Oct")
+  {
+      mInt = 10;
+  }
+  else if(monthStr == "Nov")
+  {
+      mInt = 11;
+  }
+  else if(monthStr == "Dec")
+  {
+      mInt = 12;
+  }  
+  return mInt;
+}
+  
+boolean getOnlineTime(String *timeStr)
+{
+  if (! cc3000.getHostByName(timeServer, &ip)) {
+      Serial.println(F("Couldn't resolve!"));
+    }
+    
+  client = cc3000.connectTCP(ip, 80);
+  if (client.connected()) {
+    client.fastrprint(F("GET /Beijing HTTP/1.1\r\n"));
+    client.fastrprint(F("Host: time.is\r\n"));
+    client.fastrprint(F("User-Agent: Arduino\r\n"));
+    client.fastrprint(F("Content-Type: text/html\r\n"));
+    client.fastrprint(F("Connection: close\r\n"));
+    client.fastrprint(F("\r\n"));
+    client.println();
+  } 
+  else
+  {
+    Serial.println("Could't Get online Time!");
+  }
+  
+  unsigned long lastRead = millis();
+  while (client.connected() && (millis() - lastRead < IDLE_TIMEOUT_MS)) {
+    while (client.available()) {
+      char c = client.read();
+      if(c =='E')
+      {
+        c = client.read();
+        if(c =='x')
+        {
+        c = client.read();
+        if(c =='p')
+        {
+        c = client.read();
+        if(c =='i')
+        {
+        c = client.read();
+        if(c == 'r')
+        {
+          c = client.read();
+          if(c == 'e')
+          {
+            c = client.read();
+            if(c == 's')
+            {
+              c = client.read();
+              if(c == ':')
+              {
+                while( c != '\n')
+                {
+                  c=client.read();
+                  Serial.print(c);
+                  *timeStr += c;
+                }
+                return true;
+              }
+            }
+          }
+        }
+        }
+        }
+        }
+      }
+      
+      lastRead = millis();
+    }
+  }
+  client.close();
+  return false;
+}
+
+
+void getOnlineTimeToInt(String timeStr)
+{
+  Serial.println(timeStr);
+  char d[timeStr.length()+1];
+  timeStr.toCharArray(d,timeStr.length()+1);
+  
+  String weekdayString = getTimeString(d,1,3);
+  int weekdayInt = getweekdayInt(weekdayString);
+  Serial.println(weekdayInt);
+  
+  String dayString = getTimeString(d,6,7);
+  int dayInt = dayString.toInt();
+  Serial.println(dayInt);
+  
+  String monthString = getTimeString(d,9,11);
+  int monthInt = getmonthInt(monthString);
+  Serial.println(monthInt);
+  
+  String yearString = getTimeString(d,13,16);
+  int yearInt = yearString.toInt();
+  Serial.println(yearInt);
+  
+  String hourString = getTimeString(d,18,19);
+  int hourInt = hourString.toInt();
+  Serial.println(hourInt);
+  
+  String minString = getTimeString(d,21,22);
+  int minInt = minString.toInt();
+  Serial.println(minInt);
+  
+  String secString = getTimeString(d,24,25);
+  int secInt = secString.toInt();
+  Serial.println(secInt);
+  
+//  //Set the time when get the time from time.is/Beijing  
+//  clock.set_time(secInt,minInt,hourInt,weekdayInt,dayInt,monthInt,yearInt);
+//  Serial.println("Time had been adjusted Automatically");
+}
+//----------------------------------------------------------    
+
+//----------------------------------------------------------
 /*process button*/
 //----------------------------------------------------------
 int processbutton(int but,int type,String printout)
@@ -595,7 +807,9 @@ int processbutton(int but,int type,String printout)
 }
 //----------------------------------------------------------
 
+//----------------------------------------------------------
 /*display clock*/
+//----------------------------------------------------------
 void digitalClockDisplay(){
   // digital clock display of the time
   lcd.print(clock.getHour());
@@ -622,9 +836,9 @@ void printDigits(int digits){
     lcd.print('0');
   lcd.print(digits);
 }
-
 //----------------------------------------------------------
 
+//----------------------------------------------------------
 /*ring the buzzer*/
 //----------------------------------------------------------
 void beep(unsigned char delayms)
@@ -636,6 +850,7 @@ void beep(unsigned char delayms)
 }
 //----------------------------------------------------------
 
+//----------------------------------------------------------
 /*light red LED*/
 //----------------------------------------------------------
 void redLed()
@@ -645,6 +860,7 @@ void redLed()
 }
 //----------------------------------------------------------
 
+//----------------------------------------------------------
 /*light green LED*/
 //----------------------------------------------------------
 void greenLed()
@@ -654,6 +870,7 @@ void greenLed()
 }
 //----------------------------------------------------------
 
+//----------------------------------------------------------
 /*Close all LED and Buzzer*/
 //----------------------------------------------------------
 void closeAll()
@@ -664,33 +881,52 @@ void closeAll()
 }
 //----------------------------------------------------------
 
+//----------------------------------------------------------
 /*Write to Google SpreadSheet*/
 //----------------------------------------------------------
 void push2drive(String emplo,String time,String week, String date, String inout)
 {
-  String website("/pushingbox?devid="+NFC_Id+"&emplo="+emplo+"&time="+time+"&week="+week+"&date="+date+"&inout="+inout);
+  ip = 0;
+  String website(NFC_Id+"&emplo="+emplo+"&time="+time+"&week="+week+"&date="+date+"&inout="+inout);
   char POSTID[website.length()+1];
   website.toCharArray(POSTID,website.length()+1);
+
+ 
+  if (! cc3000.getHostByName(server, &ip)) {
+      Serial.println(F("Couldn't resolve!"));
+  }
   
-  Adafruit_CC3000_Client client = cc3000.connectTCP(ip, 80);
+  client = cc3000.connectTCP(ip, 80);
+  
   if (client.connected()) {
-    client.fastrprint(F("GET "));
+    client.fastrprint(F("GET /pushingbox?devid="));
     client.fastrprint(POSTID);
     client.fastrprint(F(" HTTP/1.1\r\n"));
     client.fastrprint(F("Host: api.pushingbox.com\r\n"));
     client.fastrprint(F("User-Agent: Arduino\r\n"));
-    client.fastrprint(F("Content-Type: text/html; charset=utf-8; encoding=gzip\r\n"));
+    client.fastrprint(F("Content-Type: text/html\r\n"));
     client.fastrprint(F("Connection: close\r\n"));
     client.fastrprint(F("\r\n"));
     client.println();
   } 
-  if (client.available()) {
-        char c = client.read();
-        Serial.write(c);}
+  else
+  {
+    Serial.println("Could't Write to CLoud !");
+  }
+  unsigned long lastRead = millis();
+  while (client.connected() && (millis() - lastRead < IDLE_TIMEOUT_MS)) {
+    while (client.available()) {
+      char c = client.read();
+      Serial.print(c);
+      lastRead = millis();
+    }
+  }
+  client.close();
   delay(1);
 }
 //----------------------------------------------------------
 
+//----------------------------------------------------------
 /*Write to SD card*/
 //----------------------------------------------------------
 void write2sd(String value)
@@ -700,55 +936,3 @@ void write2sd(String value)
 }
 //----------------------------------------------------------
 
-
-///*-------- NTP code ----------*/
-//
-//const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
-//byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming & outgoing packets
-//
-//time_t getNtpTime()
-//{
-//  while (Udp.parsePacket() > 0) ; // discard any previously received packets
-////  Serial.println("Transmit NTP Request");
-//  sendNTPpacket(timeServer);
-//  uint32_t beginWait = millis();
-//  while (millis() - beginWait < 1500) {
-//    int size = Udp.parsePacket();
-//    if (size >= NTP_PACKET_SIZE) {
-////      Serial.println("Receive NTP Response");
-//      Udp.read(packetBuffer, NTP_PACKET_SIZE);  // read packet into the buffer
-//      unsigned long secsSince1900;
-//      // convert four bytes starting at location 40 to a long integer
-//      secsSince1900 =  (unsigned long)packetBuffer[40] << 24;
-//      secsSince1900 |= (unsigned long)packetBuffer[41] << 16;
-//      secsSince1900 |= (unsigned long)packetBuffer[42] << 8;
-//      secsSince1900 |= (unsigned long)packetBuffer[43];
-//      return secsSince1900 - 2208988800UL + timeZone * SECS_PER_HOUR;
-//    }
-//  }
-////  Serial.println("No NTP Response :-(");
-//  return 0; // return 0 if unable to get the time
-//}
-//
-//// send an NTP request to the time server at the given address
-//void sendNTPpacket(IPAddress &address)
-//{
-//  // set all bytes in the buffer to 0
-//  memset(packetBuffer, 0, NTP_PACKET_SIZE);
-//  // Initialize values needed to form NTP request
-//  // (see URL above for details on the packets)
-//  packetBuffer[0] = 0b11100011;   // LI, Version, Mode
-//  packetBuffer[1] = 0;     // Stratum, or type of clock
-//  packetBuffer[2] = 6;     // Polling Interval
-//  packetBuffer[3] = 0xEC;  // Peer Clock Precision
-//  // 8 bytes of zero for Root Delay & Root Dispersion
-//  packetBuffer[12]  = 49;
-//  packetBuffer[13]  = 0x4E;
-//  packetBuffer[14]  = 49;
-//  packetBuffer[15]  = 52;
-//  // all NTP fields have been given values, now
-//  // you can send a packet requesting a timestamp:                 
-//  Udp.beginPacket(address, 123); //NTP requests are to port 123
-//  Udp.write(packetBuffer, NTP_PACKET_SIZE);
-//  Udp.endPacket();
-//}
