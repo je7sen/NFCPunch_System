@@ -89,7 +89,8 @@ boolean SET = false;
 boolean stopclock = false;
 int setting=0;
 int _sec=0,_min=0,_hour=0,_week=0,_date=0,_month=0,_year=2013;
-String timeString;
+String timeString,First,Second,Third,Forth;
+int dateInt1,dateInt2,dateInt3,dateInt4;
 //-----------------------------------------------------------------------------------
 
 void setup() {
@@ -155,31 +156,31 @@ void setup() {
     digitalWrite(7,LOW);
     
     //Setup Internet//
-    if(!cc3000.begin())
-    {
-      lcd.clear();
-      lcd.print("Could't Start");
-      while(1);
-    }
-    
-    if (!cc3000.connectToAP(WLAN_SSID, WLAN_PASS, WLAN_SECURITY))
-    {
-      lcd.clear();
-      lcd.print("Could't Connect");
-      while(1);
-    }
-    
-    while(!cc3000.checkDHCP())
-    {
-      delay(100);
-    }
-    
-  Serial.println("Connected to Internet");
-  
-  if(getOnlineTime(&timeString))
-  {
-    getOnlineTimeToInt(timeString);
-  }
+//    if(!cc3000.begin())
+//    {
+//      lcd.clear();
+//      lcd.print("Could't Start");
+//      while(1);
+//    }
+//    
+//    if (!cc3000.connectToAP(WLAN_SSID, WLAN_PASS, WLAN_SECURITY))
+//    {
+//      lcd.clear();
+//      lcd.print("Could't Connect");
+//      while(1);
+//    }
+//    
+//    while(!cc3000.checkDHCP())
+//    {
+//      delay(100);
+//    }
+//    
+//  Serial.println("Connected to Internet");
+//  
+//  if(getOnlineTime(&timeString))
+//  {
+//    getOnlineTimeToInt(timeString);
+//  }
    
   delay(1000);
   lcd.clear();    
@@ -215,16 +216,16 @@ void loop(){
           
       // Now we need to try to authenticate it for read/write access
       // default KeyA: 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
-	  // default KeyB: 0xD3, 0xF7, 0xD3, 0xF7, 0xD3, 0xF7
-      uint8_t keyb[6] = { 0xD3, 0xF7, 0xD3, 0xF7, 0xD3, 0xF7 };
+      // default KeyB: 0xD3, 0xF7, 0xD3, 0xF7, 0xD3, 0xF7
+      uint8_t keyab[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
           
       // Start with block 4 (the first block of sector 1) since sector 0
       // contains the manufacturer data and it's probably better just
       // to leave it alone unless you know what you're doing
-      success = nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 0, keyb);
+      success = nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
           
       if (success)
-      {
+      {      
 
         uint8_t data[16];
         uint8_t data1[16];
@@ -245,23 +246,184 @@ void loop(){
         e=clock.getMinute();
         r=clock.getSecond();
         uint8_t buff = data2[0];
+         
         
-	//write IN/OUT to NFC tag in block 6
-        if(data2[0] == 'I')
+        String time_((String)w+":"+(String)e+":"+(String)r);
+        int yearIn2Digit = clock.getYear() - 2000;
+        String dateS("***->"+(String)clock.getDate()+"*");
+        String block = time_ + dateS;
+        
+        
+        char blockChar[16];
+        block.toCharArray(blockChar, block.length()+1);
+        
+
+        const char * blockTo = blockChar;
+        //write all 4 punch in a day inside NFC tag.
+        //write to cloud when 4 punch recorded.
+        if(data2[15] == 0)
         {
-          uint8_t inout[16]={'O','U','T',0,0,0,0,0,0,0,0,0,0,0,0,0};
-          nfc.mifareclassic_WriteDataBlock (6, inout);
+	  //write IN/OUT to NFC tag in block 6
+          if(data2[0] == 'I')
+          {
+            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
+            delay(10);
+            uint8_t inout[16]={'O','U','T',0,0,0,0,0,0,0,0,0,0,0,0,'0'};
+            nfc.mifareclassic_WriteDataBlock (6, inout);
+          }
+          else
+          {
+            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
+            delay(10);
+            uint8_t inout[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,'1'};
+            nfc.mifareclassic_WriteDataBlock (6, inout);
+            
+            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 12, 1, keyab);
+            delay(10);
+            nfc.mifareclassic_WriteNDEFString (13, blockTo);
+          }
+        }
+        else if(data2[15] == '1')
+        {
+	  //write IN/OUT to NFC tag in block 6
+          if(data2[0] == 'I')
+          {
+            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
+            delay(10);
+            uint8_t inout[16]={'O','U','T',0,0,0,0,0,0,0,0,0,0,0,0,'2'};
+            nfc.mifareclassic_WriteDataBlock (6, inout);
+            
+            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 12, 1, keyab);
+            delay(10);
+            nfc.mifareclassic_WriteNDEFString (14, blockTo);
+          }
+          else
+          {
+            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
+            delay(10);
+            uint8_t inout[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,'1'};
+            nfc.mifareclassic_WriteDataBlock (6, inout);
+          }
+        }
+        else if(data2[15] == '2')
+        {
+	  //write IN/OUT to NFC tag in block 6
+          if(data2[0] == 'I')
+          {
+            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
+            delay(10);
+            uint8_t inout[16]={'O','U','T',0,0,0,0,0,0,0,0,0,0,0,0,'2'};
+            nfc.mifareclassic_WriteDataBlock (6, inout);
+          }
+          else
+          {
+            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
+            delay(10);
+            uint8_t inout[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,'3'};
+            nfc.mifareclassic_WriteDataBlock (6, inout);
+            
+            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 16, 1, keyab);
+            delay(10);
+            nfc.mifareclassic_WriteNDEFString (17, blockTo);
+          }
+        }
+        else if(data2[15] == '3')
+        {
+	  //write IN/OUT to NFC tag in block 6
+          if(data2[0] == 'I')
+          {
+            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
+            delay(10);
+            uint8_t inout[16]={'O','U','T',0,0,0,0,0,0,0,0,0,0,0,0,'4'};
+            nfc.mifareclassic_WriteDataBlock (6, inout);
+            
+            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 16, 1, keyab);
+            delay(10);
+            nfc.mifareclassic_WriteNDEFString (18, blockTo);
+          }
+          else
+          {
+            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
+            delay(10);
+            uint8_t inout[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,'3'};
+            nfc.mifareclassic_WriteDataBlock (6, inout);
+          }
+        }
+        else if(data2[15] == '4')
+        {
+	  //write IN/OUT to NFC tag in block 6
+          if(data2[0] == 'I')
+          {
+            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
+            delay(10);
+            uint8_t inout[16]={'O','U','T',0,0,0,0,0,0,0,0,0,0,0,0,'4'};
+            nfc.mifareclassic_WriteDataBlock (6, inout);
+          }
+          else
+          {
+            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
+            delay(10);
+            uint8_t inout[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,'1'};
+            nfc.mifareclassic_WriteDataBlock (6, inout);
+            
+            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 12, 1, keyab);
+            delay(10);
+            nfc.mifareclassic_WriteNDEFString (13, blockTo);
+            
+            const char *blank = "Blank";
+            nfc.mifareclassic_WriteNDEFString (14, blank);
+            
+            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 16, 1, keyab);
+            delay(10);
+            nfc.mifareclassic_WriteNDEFString (17, blank);
+            nfc.mifareclassic_WriteNDEFString (18, blank);     
+          }
         }
         else
         {
-          uint8_t inout[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-          nfc.mifareclassic_WriteDataBlock (6, inout);
+          if(data2[0] == 'I')
+          {
+            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
+            delay(10);
+            uint8_t inout[16]={'O','U','T',0,0,0,0,0,0,0,0,0,0,0,0,0};
+            nfc.mifareclassic_WriteDataBlock (6, inout);
+          }
+          else
+          {
+            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
+            delay(10);
+            uint8_t inout[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,'1'};
+            nfc.mifareclassic_WriteDataBlock (6, inout);
+          }
         }
+        nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
+        delay(10);
+        //reread block 6 to make sure IN/OUT written
+        nfc.mifareclassic_ReadDataBlock(6, data2); 
         
-	//reread block 6 to make sure IN/OUT written
-        nfc.mifareclassic_ReadDataBlock(6, data2);        
+       if(data2[15]=='4')
+       { 
+        uint8_t Time_1[16];
+        uint8_t Time_2[16];
+        uint8_t Time_3[16];
+        uint8_t Time_4[16];
         
-		
+        nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 12, 1, keyab);
+        delay(10);
+        nfc.mifareclassic_ReadDataBlock (13, Time_1);
+        nfc.mifareclassic_ReadDataBlock (14, Time_2); 
+        
+        nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 16, 1, keyab);
+        delay(10);
+        nfc.mifareclassic_ReadDataBlock (17, Time_3);
+        nfc.mifareclassic_ReadDataBlock (18, Time_4);  
+       
+        First = processTime(Time_1,&dateInt1);
+        Second = processTime(Time_2,&dateInt2);
+        Third = processTime(Time_3,&dateInt3);
+        Forth = processTime(Time_4,&dateInt4);
+        
+	}	
 	//compare the value to check whether written or not
 	//then display the name of employees
         if (buff != data2[0])
@@ -278,8 +440,8 @@ void loop(){
           }
         
                   
-         for(uint8_t y=0; y<16; y++)
-          {
+           for(uint8_t y=0; y<16; y++)
+           {
                        
             if(data1[y] == 0xFE  )
             {;}
@@ -303,7 +465,7 @@ void loop(){
 
         //print IN/OUT to LCD
         for(uint8_t y=0; y<16; y++)
-          {
+        {
                        
             if(data2[y] == 0xFE  )
             {;}
@@ -316,7 +478,7 @@ void loop(){
             
         }
         
-        String time_((String)w+":"+(String)e+":"+(String)r);
+        
         String date_((String)clock.getDate()+clock.getMonth()+(String)clock.getYear());
         String monthfileName(clock.getMonth()+(String)clock.getYear());
         String filename(monthfileName+".txt");
@@ -347,16 +509,52 @@ void loop(){
        {
          Serial.println("Could't write to SD");
        }
+       
+       if(data2[15]=='4')
+       {
+         String monthfileName1(clock.getMonth()+(String)(clock.getYear()-2000));
+         String filename2("All"+monthfileName1+".txt");
+         char filename_2[filename2.length()+1];
+         filename2.toCharArray(filename_2,filename2.length()+1);
+          
+	dataFile = SD.open(filename_2, FILE_WRITE);
+        if(dataFile)
+        {
+          write2sd(dataString);
+          write2sd(First);
+          write2sd(Second);
+          write2sd(Third);
+          write2sd(Forth);
+          write2sd(clock.getWeek());
+          write2sd(date_);
+          if(data2[0]=='I')
+         {
+           dataFile.println("IN");
+         }
+         else
+         {
+           dataFile.println("OUT");
+         }
+       }
+      
+        dataFile.close();
+       }
+       else
+       {
+         Serial.println("Could't write to SD");
+       }
+
+         
 
        //write to Google SpreadSheet
-        if(data2[0]=='I')
-        {
-          push2drive(dataString,time_,clock.getWeek(),date_,"IN");
-        }
-        else
-        {
-          push2drive(dataString,time_,clock.getWeek(),date_,"OUT");
-        }
+//        if(data2[0]=='I')
+//        {
+//          push2drive(dataString,time_,clock.getWeek(),date_,"IN");
+//        }
+//        else
+//        {
+//          push2drive(dataString,time_,clock.getWeek(),date_,"OUT");
+//        }
          
           
           // Wait a bit before reading the card again
@@ -761,7 +959,38 @@ void getOnlineTimeToInt(String timeStr)
 //  clock.set_time(secInt,minInt,hourInt,weekdayInt,dayInt,monthInt,yearInt);
 //  Serial.println("Time had been adjusted Automatically");
 }
-//----------------------------------------------------------    
+//----------------------------------------------------------   
+
+
+//----------------------------------------------------------
+/*process Time for write to cloud*/
+//----------------------------------------------------------
+String processTime(uint8_t timeArray[],int *dateI)
+{
+  int s=0;
+  String Time_Str1="";
+  String Date_Str1="";
+  for(int h = 0; h<8; h++)
+  {
+    if(timeArray[h]!='*')
+    {
+      Time_Str1 += (char)timeArray[h];
+      s++;
+     }
+   }
+  s = s+5;
+  for(int h=0; h<2;h++)
+  {
+    if(timeArray[h+s]!='*')
+    {
+      Date_Str1+=(char)timeArray[h+s];
+    }
+   }
+   *dateI = Date_Str1.toInt();
+  return Time_Str1;
+}
+//----------------------------------------------------------
+
 
 //----------------------------------------------------------
 /*process button*/
