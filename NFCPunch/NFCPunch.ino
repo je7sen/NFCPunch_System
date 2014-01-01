@@ -4,6 +4,8 @@
 #include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
+#include <SdFat.h>
+#include <SdFatUtil.h>
 #include <Adafruit_MCP23017.h>
 #include <Adafruit_RGBLCDShield.h>
 #include <Adafruit_NFCShield_I2C.h>
@@ -12,6 +14,7 @@
 #include <ccspi.h>
 #include <string.h>
 #include "utility/debug.h"
+#include "utility/socket.h"
 //-----------------------------------------------------------------------------------
 
 //----------------------------------------------------------------------------------- 
@@ -57,11 +60,14 @@ TimeDS1302 clock(PIN_SCLK, PIN_IO, PIN_CE);
 
 Adafruit_CC3000 cc3000 = Adafruit_CC3000(ADAFRUIT_CC3000_CS, ADAFRUIT_CC3000_IRQ, ADAFRUIT_CC3000_VBAT, SPI_CLOCK_DIV2);
                                          
-#define WLAN_SSID       "wqy7377"           // cannot be longer than 32 characters!
-#define WLAN_PASS       "Yap0164100411"
+#define WLAN_SSID       "Wooys Empire"//"wqy7377"           // cannot be longer than 32 characters!
+#define WLAN_PASS       "empire123"//"Yap0164100411"
 
-#define WLAN_SECURITY   WLAN_SEC_WPA
+#define WLAN_SECURITY   WLAN_SEC_WPA2//WLAN_SEC_WPA
 #define IDLE_TIMEOUT_MS  3000
+
+#define LISTEN_PORT           80
+Adafruit_CC3000_Server ftpServer(LISTEN_PORT);
 //-----------------------------------------------------------------------------------
 
 
@@ -78,6 +84,17 @@ Adafruit_CC3000_Client client;
 /*Setting Up SD card*/
 //-----------------------------------------------------------------------------------
 File dataFile;
+Sd2Card card;
+SdVolume volume;
+SdFile root;
+SdFile file;
+#define BUFSIZ 100
+//-----------------------------------------------------------------------------------
+
+//----------------------------------------------------------------------------------- 
+/*store error strings in flash to save RAM*/
+//-----------------------------------------------------------------------------------
+#define error(s) error_P(PSTR(s))
 //-----------------------------------------------------------------------------------
 
 //----------------------------------------------------------------------------------- 
@@ -155,32 +172,63 @@ void setup() {
     digitalWrite(6,LOW);
     digitalWrite(7,LOW);
     
+    if (!card.init(SPI_HALF_SPEED, 4)) error("card.init failed!");
+  
+  // initialize a FAT volume
+  if (!volume.init(&card)) error("vol.init failed!");
+
+  PgmPrint("Volume is FAT");
+  Serial.println(volume.fatType(),DEC);
+  Serial.println();
+  
+  if (!root.openRoot(&volume)) error("openRoot failed");
+
+  // list file in root with date and size
+  PgmPrintln("Files found in root:");
+  root.ls(LS_DATE | LS_SIZE);
+  Serial.println();
+  
+  // Recursive list of all directories
+  PgmPrintln("Files found in all dirs:");
+  root.ls(LS_R);
+  
+  Serial.println();
+  PgmPrintln("Done");
+    
     //Setup Internet//
-//    if(!cc3000.begin())
-//    {
-//      lcd.clear();
-//      lcd.print("Could't Start");
-//      while(1);
-//    }
-//    
-//    if (!cc3000.connectToAP(WLAN_SSID, WLAN_PASS, WLAN_SECURITY))
-//    {
-//      lcd.clear();
-//      lcd.print("Could't Connect");
-//      while(1);
-//    }
-//    
-//    while(!cc3000.checkDHCP())
-//    {
-//      delay(100);
-//    }
-//    
-//  Serial.println("Connected to Internet");
-//  
-//  if(getOnlineTime(&timeString))
-//  {
-//    getOnlineTimeToInt(timeString);
-//  }
+    if(!cc3000.begin())
+    {
+      lcd.clear();
+      lcd.print("Could't Start");
+      while(1);
+    }
+    
+    if (!cc3000.connectToAP(WLAN_SSID, WLAN_PASS, WLAN_SECURITY))
+    {
+      lcd.clear();
+      lcd.print("Could't Connect");
+      while(1);
+    }
+    
+    while(!cc3000.checkDHCP())
+    {
+      delay(100);
+    }
+    
+    //get the server ready
+    ftpServer.begin();
+    
+    //display connected info
+    while (! displayConnectionDetails()) {
+    delay(1000);
+    }
+    
+  Serial.println("Connected to Internet");
+  
+  if(getOnlineTime(&timeString))
+  {
+    ;//setToOnlineTime(timeString);
+  }
    
   delay(1000);
   lcd.clear();    
@@ -191,6 +239,96 @@ void setup() {
 
 void loop(){ 
   
+  char clientline[BUFSIZ];
+  int index = 0;
+  Adafruit_CC3000_ClientRef clientRef = ftpServer.available();
+
+  if (clientRef) {
+    // an http request ends with a blank line
+    boolean current_line_is_blank = true;
+ 
+    // reset the input buffer
+    index = 0;
+ 
+    while (clientRef.connected()) {
+      if (clientRef.available()) {
+        char c = clientRef.read();
+ 
+        // If it isn't a new line, add the character to the buffer
+        if (c != '\n' && c != '\r') {
+          clientline[index] = c;
+          index++;
+          // are we too big for the buffer? start tossing out data
+          if (index >= BUFSIZ) 
+            index = BUFSIZ -1;
+ 
+          // continue to read more data!
+          continue;
+        }
+ 
+        // got a \n or \r new line, which means the string is done
+        clientline[index] = 0;
+ 
+        // Print it out for debugging
+        Serial.println(clientline);
+ 
+        // Look for substring such as a request to get the root file
+        if (strstr(clientline, "GET / ") != 0) {
+          // send a standard http response header
+          clientRef.println("HTTP/1.1 200 OK");
+          clientRef.println("Content-Type: text/html");
+          clientRef.println();
+ 
+          // print all the files, use a helper to keep it clean
+          clientRef.println("<h2>Files:</h2>");
+          ListFiles(clientRef, LS_SIZE);
+        } else if (strstr(clientline, "GET /") != 0) {
+          // this time no space after the /, so a sub-file!
+          char *filename;
+ 
+          filename = clientline + 5; // look after the "GET /" (5 chars)
+          // a little trick, look for the " HTTP/1.1" string and 
+          // turn the first character of the substring into a 0 to clear it out.
+          (strstr(clientline, " HTTP"))[0] = 0;
+ 
+          // print the file we want
+          Serial.println(filename);
+ 
+          if (! file.open(&root, filename, O_READ)) {
+            clientRef.println("HTTP/1.1 404 Not Found");
+            clientRef.println("Content-Type: text/html");
+            clientRef.println();
+            clientRef.println("<h2>File Not Found!</h2>");
+            break;
+          }
+ 
+          Serial.println("Opened!");
+ 
+          clientRef.println("HTTP/1.1 200 OK");
+          clientRef.println("Content-Type: text/plain");
+          clientRef.println();
+ 
+          int16_t c;
+          while ((c = file.read()) > 0) {
+              // uncomment the serial to debug (slow!)
+              //Serial.print((char)c);
+              clientRef.print((char)c);
+          }
+          file.close();
+        } else {
+          // everything else is a 404
+          clientRef.println("HTTP/1.1 404 Not Found");
+          clientRef.println("Content-Type: text/html");
+          clientRef.println();
+          clientRef.println("<h2>File Not Found!</h2>");
+        }
+        break;
+      }
+    }
+    // give the web browser time to receive the data
+    delay(10);
+    clientRef.close();
+  }
 
   if(!stopclock)
   {
@@ -480,7 +618,7 @@ void loop(){
         
         
         String date_((String)clock.getDate()+clock.getMonth()+(String)clock.getYear());
-        String monthfileName(clock.getMonth()+(String)clock.getYear());
+        String monthfileName((String)clock.getDate()+clock.getMonth()+(String)(clock.getYear()-2000));
         String filename(monthfileName+".txt");
         char filename_1[filename.length()+1];
         filename.toCharArray(filename_1,filename.length()+1);
@@ -513,7 +651,7 @@ void loop(){
        if(data2[15]=='4')
        {
          String monthfileName1(clock.getMonth()+(String)(clock.getYear()-2000));
-         String filename2("All"+monthfileName1+".txt");
+         String filename2(monthfileName1+".txt");
          char filename_2[filename2.length()+1];
          filename2.toCharArray(filename_2,filename2.length()+1);
           
@@ -536,25 +674,26 @@ void loop(){
            dataFile.println("OUT");
          }
        }
-      
-        dataFile.close();
-       }
        else
        {
          Serial.println("Could't write to SD");
        }
+      
+        dataFile.close();
+       }
+       
 
          
 
        //write to Google SpreadSheet
-//        if(data2[0]=='I')
-//        {
-//          push2drive(dataString,time_,clock.getWeek(),date_,"IN");
-//        }
-//        else
-//        {
-//          push2drive(dataString,time_,clock.getWeek(),date_,"OUT");
-//        }
+        if(data2[0]=='I')
+        {
+          push2drive(dataString,time_,clock.getWeek(),date_,"IN");
+        }
+        else
+        {
+          push2drive(dataString,time_,clock.getWeek(),date_,"OUT");
+        }
          
           
           // Wait a bit before reading the card again
@@ -851,6 +990,7 @@ int getmonthInt(String monthStr)
   
 boolean getOnlineTime(String *timeStr)
 {
+  boolean returnValue = false;
   if (! cc3000.getHostByName(timeServer, &ip)) {
       Serial.println(F("Couldn't resolve!"));
     }
@@ -903,7 +1043,7 @@ boolean getOnlineTime(String *timeStr)
                   Serial.print(c);
                   *timeStr += c;
                 }
-                return true;
+                returnValue = true;
               }
             }
           }
@@ -917,11 +1057,11 @@ boolean getOnlineTime(String *timeStr)
     }
   }
   client.close();
-  return false;
+  return returnValue;
 }
 
 
-void getOnlineTimeToInt(String timeStr)
+void setToOnlineTime(String timeStr)
 {
   Serial.println(timeStr);
   char d[timeStr.length()+1];
@@ -955,9 +1095,9 @@ void getOnlineTimeToInt(String timeStr)
   int secInt = secString.toInt();
   Serial.println(secInt);
   
-//  //Set the time when get the time from time.is/Beijing  
-//  clock.set_time(secInt,minInt,hourInt,weekdayInt,dayInt,monthInt,yearInt);
-//  Serial.println("Time had been adjusted Automatically");
+  //Set the time when get the time from time.is/Beijing  
+  clock.set_time(secInt,minInt,hourInt,weekdayInt,dayInt,monthInt,yearInt);
+  Serial.println("Time had been adjusted Automatically");
 }
 //----------------------------------------------------------   
 
@@ -1162,6 +1302,110 @@ void write2sd(String value)
 {
  dataFile.print(value);
  dataFile.print("\t");
+}
+//----------------------------------------------------------
+
+//----------------------------------------------------------
+/*Display connection detail*/
+//----------------------------------------------------------
+bool displayConnectionDetails(void)
+{
+  uint32_t ipAddress, netmask, gateway, dhcpserv, dnsserv;
+  
+  if(!cc3000.getIPAddress(&ipAddress, &netmask, &gateway, &dhcpserv, &dnsserv))
+  {
+    Serial.println(F("Unable to retrieve the IP Address!\r\n"));
+    return false;
+  }
+  else
+  {
+    Serial.print(F("\nIP Addr: ")); cc3000.printIPdotsRev(ipAddress);
+    Serial.print(F("\nNetmask: ")); cc3000.printIPdotsRev(netmask);
+    Serial.print(F("\nGateway: ")); cc3000.printIPdotsRev(gateway);
+    Serial.print(F("\nDHCPsrv: ")); cc3000.printIPdotsRev(dhcpserv);
+    Serial.print(F("\nDNSserv: ")); cc3000.printIPdotsRev(dnsserv);
+    Serial.println();
+    return true;
+  }
+}
+//----------------------------------------------------------
+
+//----------------------------------------------------------
+/*handle error for sd card*/
+//----------------------------------------------------------
+void error_P(const char* str) {
+  PgmPrint("error: ");
+  SerialPrintln_P(str);
+  if (card.errorCode()) {
+    PgmPrint("SD error: ");
+    Serial.print(card.errorCode(), HEX);
+    Serial.print(',');
+    Serial.println(card.errorData(), HEX);
+  }
+  while(1);
+}
+//----------------------------------------------------------
+
+//----------------------------------------------------------
+/*List all the file inside sd card*/
+//----------------------------------------------------------
+void ListFiles(Adafruit_CC3000_ClientRef client, uint8_t flags) {
+  // This code is just copied from SdFile.cpp in the SDFat library
+  // and tweaked to print to the client output in html!
+  dir_t p;
+ 
+  root.rewind();
+  client.println("<ul>");
+  while (root.readDir(p) > 0) {
+    // done if past last used entry
+    if (p.name[0] == DIR_NAME_FREE) break;
+ 
+    // skip deleted entry and entries for . and  ..
+    if (p.name[0] == DIR_NAME_DELETED || p.name[0] == '.') continue;
+ 
+    // only list subdirectories and files
+    if (!DIR_IS_FILE_OR_SUBDIR(&p)) continue;
+ 
+    // print any indent spaces
+    client.print("<li><a href=\"");
+    for (uint8_t i = 0; i < 11; i++) {
+      if (p.name[i] == ' ') continue;
+      if (i == 8) {
+        client.print('.');
+      }
+      client.print((char)p.name[i]);
+    }
+    client.print("\">");
+ 
+    // print file name with possible blank fill
+    for (uint8_t i = 0; i < 11; i++) {
+      if (p.name[i] == ' ') continue;
+      if (i == 8) {
+        client.print('.');
+      }
+      client.print((char)p.name[i]);
+    }
+ 
+    client.print("</a>");
+ 
+    if (DIR_IS_SUBDIR(&p)) {
+      client.print('/');
+    }
+ 
+    // print modify date/time if requested
+    if (flags & LS_DATE) {
+       root.printFatDate(p.lastWriteDate);
+       client.print(' ');
+       root.printFatTime(p.lastWriteTime);
+    }
+    // print size if requested
+    if (!DIR_IS_SUBDIR(&p) && (flags & LS_SIZE)) {
+      client.print(' ');
+      client.print(p.fileSize);
+    }
+    client.println("</li>");
+  }
+  client.println("</ul>");
 }
 //----------------------------------------------------------
 
