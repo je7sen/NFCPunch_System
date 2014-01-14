@@ -116,12 +116,15 @@ uint32_t ip;
 boolean SET = false;
 boolean stopclock = false;
 int setting=0;
-int _sec=0,_min=0,_hour=0,_week=0,_date=0,_month=0,_year=2013;
+int _sec=0,_min=0,_hour=0,_week=0,_date=0,_month=0,_year=2014;
 String timeString,First,Second,Third,Forth;
 int dateInt1,dateInt2,dateInt3,dateInt4;
-String folder[50];
+String folder[20];
+String folder2[20];
 int folderCount =0;
 int folderIndex=0;
+bool firstLayer = true;
+bool secondLayer = false;
 //-----------------------------------------------------------------------------------
 
 void setup() {
@@ -265,9 +268,10 @@ void setup() {
 #if defined INTERNET
   if(getOnlineTime(&timeString))
   {
-    ;//setToOnlineTime(timeString);
+    setToOnlineTime(timeString);
   }
 #endif
+
    
   delay(1000);
   lcd.clear();    
@@ -328,9 +332,13 @@ void loop(){
  
           // print all the files, use a helper to keep it clean
           clientRef.println("<h2>Files:</h2>");
-//          ROOT = SD.open("/");
-//          printDirectory(clientRef,ROOT);
+          firstLayer = true;
+          secondLayer = false;
+          root.seekSet(416);
+          Serial.println(root.curPosition());
           ListFiles(root,clientRef, LS_R,0);
+          Serial.println(root.curPosition());
+          
         }else if (strstr(clientline, "GET /") != 0) {
           
           
@@ -345,33 +353,86 @@ void loop(){
           
           
           bool isFolder = false;
-          for(int k=0; k<50; k++)
+          for(int k=0; k<20; k++)
           {
-            if(folder[k].equals((String)direc))
-            {
+            if(firstLayer){
+              if(folder[k].equals((String)direc))
+              {
+                
+                Serial.println("1st Layer");
+                Serial.println(folder[k]);
+                
+                char di[folder[k].length()+1];
+                folder[k].toCharArray(di,folder[k].length()+1);
+                
+                folderIndex = k;
+                
+                firstLayer = false;
+                secondLayer = true;   
+   
                 // send a standard http response header
                 clientRef.println("HTTP/1.1 200 OK");
                 clientRef.println("Content-Type: text/html");
                 clientRef.println();
-                 Serial.println(folder[k]);
-                Serial.println(folder[k+1]);
-                
-               char di[folder[k].length()+1];
-               folder[k].toCharArray(di,folder[k].length()+1);
-                
-                int hereIndex = folder[k+1].toInt();
                 SdFile s;
                 clientRef.println("<h2>Files:</h2>");
-                if (s.open(root, di, O_READ)){
+                Serial.println(root.curPosition());
+                bool ope = s.open(root, di, O_READ); 
+                if (ope){
                   Serial.println("opened the folder");
                   ListFiles(s, clientRef, LS_R, 2);
                 }
-               Serial.println(root.curPosition());
-//                root.seekSet(32 * (hereIndex + 1));
-
-                folderIndex = k+1;
+                Serial.println(root.curPosition());
+//                root.seekSet(416);
+                
                 isFolder = true;
-                k=50;
+                k=20;
+                
+              }
+            }else if(secondLayer){
+              if(folder2[k].equals((String)direc))
+              {
+                
+                Serial.println("2nd Layer");
+
+               char di[folder[folderIndex].length()+1];
+               folder[folderIndex].toCharArray(di,folder[folderIndex].length()+1);
+                
+               char di2[folder2[k].length()+1];
+               folder2[k].toCharArray(di2,folder2[k].length()+1);
+               
+               const char* DI=(const char*)di;
+               const char* DI2=(const char*)di2;
+                Serial.println(di);
+                Serial.println(di2); 
+                
+                // send a standard http response header
+                clientRef.println("HTTP/1.1 200 OK");
+                clientRef.println("Content-Type: text/html");
+                clientRef.println();
+                SdFile s;
+                root.seekSet(416);
+                Serial.println(root.curPosition());
+                
+                delay(20);
+                bool ope = s.open(&root ,di ,O_READ);
+                clientRef.println("<h2>Files:</h2>");
+                if (ope){
+                  s.rewind();
+                  Serial.println("step1");
+                  SdFile d;
+                  delay(20);
+                  bool ope1 = d.open(&s ,di2 ,O_READ);
+                  if(ope1){
+                  Serial.println("opened the folder");
+                  ListFiles(d, clientRef, LS_R, 2);}
+                }
+                isFolder = true;
+                k=20;
+                
+                firstLayer = true;
+                secondLayer = false;
+              }
             }
           }
           
@@ -876,15 +937,15 @@ void loop(){
           }
           else if(setting==4)
           { 
-            _hour=processbutton(buttons,_hour,"Hour =",24);
+            _hour=processbutton(buttons,_hour,"Hour =",23);
           }
           else if(setting==5)
           { 
-            _min=processbutton(buttons,_min,"Minute =",60);
+            _min=processbutton(buttons,_min,"Minute =",59);
           }
 	 else if(setting==6)
 	 {
-	    _sec=processbutton(buttons,_sec,"Second =",60);
+	    _sec=processbutton(buttons,_sec,"Second =",59);
 	  }
           else if(setting==7)
           { 
@@ -917,7 +978,7 @@ void loop(){
                clock.set_time(_sec,_min,_hour,_week,_date,_month,_year);
             }
           }
-          else if(setting>7||setting<=-1)
+          else if(setting==8 ||setting==-1)
           {
             setting=0;
             delay(100);
@@ -1479,18 +1540,20 @@ void ListFiles(SdFile root,Adafruit_CC3000_ClientRef client, uint8_t flags, uint
   // This code is just copied from SdFile.cpp in the SDFat library
   // and tweaked to print to the client output in html!
   dir_t p;
+  uint16_t counter =0;
   int folderCount = 0;
   root.rewind();
   client.println("<ul>");
   while (root.readDir(&p) > 0) {
+    counter ++;
     // done if past last used entry
     if (p.name[0] == DIR_NAME_FREE) break;
  
     // skip deleted entry and entries for . and  ..
-    if (p.name[0] == DIR_NAME_DELETED || p.name[0] == '.') continue;
+    if (p.name[0] == DIR_NAME_DELETED || p.name[0] == '.') ;//continue;
  
     // only list subdirectories and files
-    if (!DIR_IS_FILE_OR_SUBDIR(&p)) continue;
+    if (!DIR_IS_FILE_OR_SUBDIR(&p)) ;//continue;
  
     // print any indent spaces
     client.print("<li><a href=\"");
@@ -1534,27 +1597,46 @@ void ListFiles(SdFile root,Adafruit_CC3000_ClientRef client, uint8_t flags, uint
     // list subdirectory content if requested
     if ((flags & LS_R) && DIR_IS_SUBDIR(&p)) {
       uint16_t index = root.curPosition()/32 - 1;
-//      Serial.println(index);
-//      SdFile s;
-      folder[folderCount] = "";
-      for (uint8_t i = 0; i < 11; i++) {
-      if (p.name[i] == ' ') continue;
-      folder[folderCount] += (char)p.name[i];
+      if(firstLayer){
+        folder[folderCount] = "";
+        for (uint8_t i = 0; i < 11; i++) {
+          if (p.name[i] == ' ') continue;
+          folder[folderCount] += (char)p.name[i];
+        }
+      
+        Serial.print("Folder = ");
+        Serial.println(folder[folderCount]);
+        folderCount ++;
+        folder[folderCount] = "";
+        folder[folderCount] += index;
+        folderCount ++;
+      }else if(secondLayer){
+        folder2[folderCount] = "";
+        for (uint8_t i = 0; i < 11; i++) {
+          if (p.name[i] == ' ') continue;
+          folder2[folderCount] += (char)p.name[i];
+        }
+      
+        Serial.print("Folder = ");
+        Serial.println(folder2[folderCount]);
+        folderCount ++;
+        folder2[folderCount] = "";
+        folder2[folderCount] += index;
+        folderCount ++;
       }
-      
-      Serial.print("Folder = ");
-      Serial.print(folder[folderCount]);
-      folderCount ++;
-      folder[folderCount] = "";
-      folder[folderCount] += index;
-      Serial.println(" & Index = "+ folder[folderCount]);
-      
-      folderCount ++;
+//      SdFile s;
 //      if (s.open(&root, index, O_READ)){
 //        ListFiles(s, client, LS_R, indent +2);
 //      }
 //      root.seekSet(32 * (index + 1));
     }
+    
+    if(counter>2000)
+      {
+        counter = 0;
+        break;
+      }
+    
   }
   client.println("</ul>");
 }
