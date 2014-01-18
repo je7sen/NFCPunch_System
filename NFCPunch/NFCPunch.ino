@@ -1,5 +1,9 @@
 #ifndef INTERNET
-//#define INTERNET
+#define INTERNET
+#endif
+
+#ifndef DEBUG
+#define DEBUG
 #endif
 
 //----------------------------------------------------------------------------------- 
@@ -85,6 +89,7 @@ status_t newNetworkState = STATUS_DISCONNECTED;
 //-----------------------------------------------------------------------------------
 char server[] = "api.pushingbox.com";//213.186.33.19
 String NFC_Id("vB9504FE1A766082");
+String NFC_Id2("vC1B9CE5FED8133B");
 char timeServer[] = "time.is";
 Adafruit_CC3000_Client client;
 //-----------------------------------------------------------------------------------
@@ -98,6 +103,7 @@ Sd2Card card;
 SdVolume volume;
 SdFile root;
 SdFile file;
+SdFile parseSdFile;
 
 #define BUFSIZ 100
 //-----------------------------------------------------------------------------------
@@ -116,7 +122,7 @@ uint32_t ip;
 boolean SET = false;
 boolean stopclock = false;
 int setting=0;
-int _sec=0,_min=0,_hour=0,_week=0,_date=0,_month=0,_year=2014;
+int _sec=0,_min=0,_hour=0,_week=1,_date=1,_month=1,_year=2014;
 String timeString,First,Second,Third,Forth;
 int dateInt1,dateInt2,dateInt3,dateInt4;
 String folder[20];
@@ -125,6 +131,9 @@ int folderCount =0;
 int folderIndex=0;
 bool firstLayer = true;
 bool secondLayer = false;
+bool dimDisplay = true;
+int dimMinuteLast = 0;
+int dimMinuteNow = 0;
 //-----------------------------------------------------------------------------------
 
 void setup() {
@@ -216,52 +225,7 @@ void setup() {
 
   //Get all wifi setting from SD Card
   if(getWlanSetting(&ssid,&pass,&mode)){
-
-    char ssid_c[ssid.length()+1];
-    char pass_c[pass.length()+1];
-    
-    ssid.toCharArray(ssid_c,ssid.length()+1);
-    pass.toCharArray(pass_c,pass.length()+1);
-     
-    const char* SSID_C = ssid_c;
-    const char* PASS_C = pass_c;
-    
-    Serial.println(SSID_C);
-    Serial.println(PASS_C);
-    Serial.println(mode);
-    
-    //Setup Internet//
-    if(!cc3000.begin())
-    {
-      Serial.println("Could't Start Wifi");
-      lcd.clear();
-      lcd.print("Could't Start");
-      while(1);
-    }
-    
-    if (!cc3000.connectToAP(SSID_C,PASS_C, mode))
-    {
-      Serial.println("Could't Connect to network");
-      lcd.clear();
-      lcd.print("Could't Connect");
-      while(1);
-    }
-    
-    while(!cc3000.checkDHCP())
-    {
-      delay(100);
-    }
-    
-    //get the server ready
-    ftpServer.begin();
-    
-    //display connected info
-    while (! displayConnectionDetails()) {
-    delay(1000);
-    }
-    
-  Serial.println("Connected to Internet");
-    
+    connectToNetwork(ssid,pass,mode); 
   }
     
 
@@ -276,19 +240,32 @@ void setup() {
   delay(1000);
   lcd.clear();    
  
+  dimMinuteLast = clock.getMinute();
+  dimMinuteNow = dimMinuteLast;
   
 }
 
 
 void loop(){ 
   
+  if(dimDisplay){
+    dimMinuteNow = clock.getMinute();
+    if((dimMinuteNow-dimMinuteLast)>=2||(dimMinuteNow-dimMinuteLast)==-57){
+      dimMinuteNow = 0;
+      dimMinuteLast= 0;
+      dimDisplay = false;
+      lcd.setBacklight(GREEN);
+      Serial.println("Display dimmed.");
+    }
+  }
   status_t networkState=cc3000.getStatus();
-  
-  
-  
+
   if(networkState != newNetworkState){
-   Serial.println(networkState); 
+   displayNetworkState(networkState); 
    newNetworkState = networkState;
+   if(networkState == STATUS_DISCONNECTED){
+     connectToNetwork(ssid,pass,mode);
+   }
   }
   char clientline[BUFSIZ];
   int index = 0;
@@ -340,8 +317,7 @@ void loop(){
           Serial.println(root.curPosition());
           
         }else if (strstr(clientline, "GET /") != 0) {
-          
-          
+
            // this time no space after the /, so a sub-file!
           char *direc;
  
@@ -349,9 +325,7 @@ void loop(){
           // a little trick, look for the " HTTP/1.1" string and 
           // turn the first character of the substring into a 0 to clear it out.
           (strstr(clientline, " HTTP"))[0] = 0;
-          
-          
-          
+
           bool isFolder = false;
           for(int k=0; k<20; k++)
           {
@@ -424,6 +398,7 @@ void loop(){
                   delay(20);
                   bool ope1 = d.open(&s ,di2 ,O_READ);
                   if(ope1){
+                  setDir(d);
                   Serial.println("opened the folder");
                   ListFiles(d, clientRef, LS_R, 2);}
                 }
@@ -438,15 +413,43 @@ void loop(){
           
           if(!isFolder)
           {
-            // print the file we want
-          if (! file.open(&root, direc, O_READ)) {
-            clientRef.println("HTTP/1.1 404 Not Found");
-            clientRef.println("Content-Type: text/html");
-            clientRef.println();
-            clientRef.println("<h2>File Not Found!</h2>");
-            break;
-          }
+            String fName = "";
+            fName += (String)direc;
+            bool isTextFile = false;
+            
+            if(fName.endsWith(".TXT")){
+              isTextFile = true;
+              if(!isNumberDigit(fName.substring(0,1))){
+                Serial.println(fName.substring(0,3));
+              }
+              else if(!isNumberDigit(fName.substring(1,2))){
+                Serial.println(fName.substring(1,4));
+              }
+              else if(!isNumberDigit(fName.substring(2,3))){
+                Serial.println(fName.substring(2,5));
+              }
+            }
           
+          if(isTextFile){
+             // print the file we want
+            if (! file.open(&getDir(), direc, O_READ)) {
+              clientRef.println("HTTP/1.1 404 Not Found");
+              clientRef.println("Content-Type: text/html");
+              clientRef.println();
+              clientRef.println("<h2>File Not Found!</h2>");
+              break;
+            } 
+          }
+          else{
+              // print the file we want
+            if (! file.open(&root, direc, O_READ)) {
+              clientRef.println("HTTP/1.1 404 Not Found");
+              clientRef.println("Content-Type: text/html");
+              clientRef.println();
+              clientRef.println("<h2>File Not Found!</h2>");
+              break;
+            }
+          } 
           Serial.println("Opened!");
  
           clientRef.println("HTTP/1.1 200 OK");
@@ -461,18 +464,6 @@ void loop(){
           }
           file.close();
           }
-            
-//              
-//          
-//          (strstr(clientline, " HTTP"))[0] = 0;
-//          String direct_ = "/"+(String)direc+"/";
-//          char di[direct_.length()+1];
-//          direct_.toCharArray(di,direct_.length()+1);
-//          
-//          // print all the files, use a helper to keep it clean
-//          clientRef.println("<h2>Files:</h2>");
-//          ROOT = SD.open(di);
-//          printDirectory(clientRef,ROOT); 
         
         } else {
           // everything else is a 404
@@ -507,6 +498,11 @@ void loop(){
  
   
   if (success) {
+    
+    dimDisplay = true;
+    lcd.setBacklight(WHITE);
+    dimMinuteLast = clock.getMinute();
+    dimMinuteNow = dimMinuteLast;
     
     if (uidLength == 4)
     {
@@ -867,6 +863,10 @@ void loop(){
         {
           push2drive(dataString,time_,clock.getWeek(),date_,"OUT");
         }
+        if(data2[15]=='4')
+        {
+          push2drive2(dataString,First,Second,Third,Forth,clock.getWeek(),date_);
+        }
 #endif
          
           
@@ -919,36 +919,14 @@ void loop(){
         if (buttons)
         {
                  
-          if(setting==0)
-          {
-            _year=processbutton(buttons,_year,"Year =",2050);
-          }
-          else if(setting==1)
-          {
-            _month=processbutton(buttons,_month,"Month =",12);
-          }
-          else if(setting==2)
-          { 
-            _date=processbutton(buttons,_date,"Day =",31);
-          }
-          else if(setting==3)
-          {
-            _week=processbutton(buttons,_week,"Week =",7);
-          }
-          else if(setting==4)
-          { 
-            _hour=processbutton(buttons,_hour,"Hour =",23);
-          }
-          else if(setting==5)
-          { 
-            _min=processbutton(buttons,_min,"Minute =",59);
-          }
-	 else if(setting==6)
-	 {
-	    _sec=processbutton(buttons,_sec,"Second =",59);
-	  }
-          else if(setting==7)
-          { 
+          if(setting==0){_year=processbutton(buttons,_year,"Year =",2050);}
+          else if(setting==1){_month=processbutton(buttons,_month,"Month =",12);}
+          else if(setting==2){_date=processbutton(buttons,_date,"Day =",31);}
+          else if(setting==3){_week=processbutton(buttons,_week,"Week =",7);}
+          else if(setting==4){_hour=processbutton(buttons,_hour,"Hour =",23);}
+          else if(setting==5){_min=processbutton(buttons,_min,"Minute =",59);}
+	  else if(setting==6){_sec=processbutton(buttons,_sec,"Second =",59);}
+          else if(setting==7){ 
             String time_week((String)_hour+":"+(String)_min+":"+(String)_sec+"   "+(String)_week);
 	    String date_1((String)_date+_month+(String)_year);
 		  
@@ -1077,88 +1055,33 @@ int getweekdayInt(String weekdayStr)
 {
   int wdInt = 0;
   
-    if(weekdayStr == "Mon")
-    {
-      wdInt = 1;
-    }
-    else if(weekdayStr == "Tue")
-    {
-      wdInt = 2;
-    }
-    else if(weekdayStr == "Wed")
-    {
-      wdInt = 3;
-    }
-    else if(weekdayStr == "Thr")
-    {
-      wdInt = 4;
-    }
-    else if(weekdayStr == "Fri")
-    {
-      wdInt = 5;
-    }
-    else if(weekdayStr == "Sat")
-    {
-      wdInt = 6;
-    }
-    else if(weekdayStr == "Sun")
-    {
-      wdInt = 7;
-    }
+    if(weekdayStr == "Mon"){wdInt = 1;}
+    else if(weekdayStr == "Tue"){wdInt = 2;}
+    else if(weekdayStr == "Wed"){wdInt = 3;}
+    else if(weekdayStr == "Thr"){wdInt = 4;}
+    else if(weekdayStr == "Fri"){wdInt = 5;}
+    else if(weekdayStr == "Sat"){wdInt = 6;}
+    else if(weekdayStr == "Sun"){wdInt = 7;}
+  
   return wdInt;
 }
 
 int getmonthInt(String monthStr)
 {
   int mInt = 0;
-  if(monthStr == "Jan")
-  {
-      mInt = 1;
-  }
-  else if(monthStr == "Feb")
-  {
-      mInt = 2;
-  }
-  else if(monthStr == "Mac")
-  {
-      mInt = 3;
-  }
-  else if(monthStr == "Apr")
-  {
-      mInt = 4;
-  }
-  else if(monthStr == "May")
-  {
-      mInt = 5;
-  }
-  else if(monthStr == "Jun")
-  {
-      mInt = 6;
-  }
-  else if(monthStr == "Jul")
-  {
-      mInt = 7;
-  }
-  else if(monthStr == "Aug")
-  {
-      mInt = 8;
-  }
-  else if(monthStr == "Sep")
-  {
-      mInt = 9;
-  }
-  else if(monthStr == "Oct")
-  {
-      mInt = 10;
-  }
-  else if(monthStr == "Nov")
-  {
-      mInt = 11;
-  }
-  else if(monthStr == "Dec")
-  {
-      mInt = 12;
-  }  
+  if(monthStr == "Jan"){mInt = 1;}
+  else if(monthStr == "Feb"){mInt = 2;}
+  else if(monthStr == "Mac"){mInt = 3;}
+  else if(monthStr == "Apr"){mInt = 4;}
+  else if(monthStr == "May"){mInt = 5;}
+  else if(monthStr == "Jun"){mInt = 6;}
+  else if(monthStr == "Jul"){mInt = 7;}
+  else if(monthStr == "Aug"){mInt = 8;}
+  else if(monthStr == "Sep"){mInt = 9;}
+  else if(monthStr == "Oct"){mInt = 10;}
+  else if(monthStr == "Nov"){mInt = 11;}
+  else if(monthStr == "Dec"){mInt = 12;}  
+  
   return mInt;
 }
   
@@ -1168,6 +1091,7 @@ boolean getOnlineTime(String *timeStr)
   if (! cc3000.getHostByName(timeServer, &ip)) {
       Serial.println(F("Couldn't resolve!"));
     }
+  if(ip == 0)return false;
     
   client = cc3000.connectTCP(ip, 80);
   if (client.connected()) {
@@ -1451,6 +1375,49 @@ void push2drive(String emplo,String time,String week, String date, String inout)
   if (! cc3000.getHostByName(server, &ip)) {
       Serial.println(F("Couldn't resolve!"));
   }
+  if(ip==0)return;
+  
+  client = cc3000.connectTCP(ip, 80);
+  
+  if (client.connected()) {
+    client.fastrprint(F("GET /pushingbox?devid="));
+    client.fastrprint(POSTID);
+    client.fastrprint(F(" HTTP/1.1\r\n"));
+    client.fastrprint(F("Host: api.pushingbox.com\r\n"));
+    client.fastrprint(F("User-Agent: Arduino\r\n"));
+    client.fastrprint(F("Content-Type: text/html\r\n"));
+    client.fastrprint(F("Connection: close\r\n"));
+    client.fastrprint(F("\r\n"));
+    client.println();
+  } 
+  else
+  {
+    Serial.println("Could't Write to CLoud !");
+  }
+  unsigned long lastRead = millis();
+  while (client.connected() && (millis() - lastRead < IDLE_TIMEOUT_MS)) {
+    while (client.available()) {
+      char c = client.read();
+      Serial.print(c);
+      lastRead = millis();
+    }
+  }
+  client.close();
+  delay(1);
+}
+
+void push2drive2(String employ,String in1,String out1, String in2, String out2, String wday, String dat)
+{
+  ip = 0;
+  String website(NFC_Id2+"&employ="+employ+"&in1="+in1+"&out1="+out1+"&in2="+in2+"&out2="+out2+"&wday="+wday+"&date="+dat);
+  char POSTID[website.length()+1];
+  website.toCharArray(POSTID,website.length()+1);
+
+ 
+  if (! cc3000.getHostByName(server, &ip)) {
+      Serial.println(F("Couldn't resolve!"));
+  }
+  if(ip==0)return;
   
   client = cc3000.connectTCP(ip, 80);
   
@@ -1646,6 +1613,11 @@ void ListFiles(SdFile root,Adafruit_CC3000_ClientRef client, uint8_t flags, uint
 //----------------------------------------------------------
 /*List all the file inside sd card*/
 //----------------------------------------------------------
+//Example usage:
+//          ROOT = SD.open(di);
+//          printDirectory(clientRef,ROOT); 
+//----------------------------------------------------------
+/*
 void printDirectory(Adafruit_CC3000_ClientRef client,File dir) {
   
   // Begin at the start of the directory
@@ -1691,7 +1663,7 @@ void printDirectory(Adafruit_CC3000_ClientRef client,File dir) {
    
    client.println("</ul>");
 }
-
+*/
 //----------------------------------------------------------
 
 
@@ -1761,4 +1733,139 @@ boolean getWlanSetting(String *ssid_c,String *pass_c, uint8_t *mode_c) {
 
 //----------------------------------------------------------
 
+//----------------------------------------------------------
+/*Display corrent network state*/
+//----------------------------------------------------------
+void displayNetworkState(status_t state)
+{
+  switch (state)
+  {
+    case 0:
+      Serial.println("Disconnected!");
+      break;
+    case 1:
+      Serial.println("Scanning!");
+      break;
+    case 2:
+      Serial.println("Connecting!");
+      break;
+    case 3:
+      Serial.println("Connected!");
+      break;
+  }
+}
+//----------------------------------------------------------
 
+//----------------------------------------------------------
+/*Display security mode*/
+//----------------------------------------------------------
+void displaySecurityMode(uint8_t mode)
+{
+  switch (mode)
+  {
+    case 0:
+      Serial.println("Unsecured");
+      break;
+    case 1:
+      Serial.println("WEP");
+      break;
+    case 2:
+      Serial.println("WPA");
+      break;
+    case 3:
+      Serial.println("WPA2");
+      break;
+  }
+}
+//----------------------------------------------------------
+  
+
+//----------------------------------------------------------
+/*Connect to network*/
+//----------------------------------------------------------  
+void connectToNetwork(String ssid, String pass, uint8_t mode)
+{
+    char ssid_c[ssid.length()+1];
+    char pass_c[pass.length()+1];
+    
+    ssid.toCharArray(ssid_c,ssid.length()+1);
+    pass.toCharArray(pass_c,pass.length()+1);
+     
+    const char* SSID_C = ssid_c;
+    const char* PASS_C = pass_c;
+    
+    Serial.println(SSID_C);
+    Serial.println(PASS_C);
+    displaySecurityMode(mode);
+    
+    //Setup Internet//
+    if(!cc3000.begin())
+    {
+      Serial.println("Could't Start Wifi");
+      lcd.clear();
+      lcd.print("Could't Start");
+      while(1);
+    }
+    
+    if (!cc3000.connectToAP(SSID_C,PASS_C, mode))
+    {
+      Serial.println("Could't Connect to network");
+      lcd.clear();
+      lcd.print("Could't Connect");
+      while(1);
+    }
+    
+    while(!cc3000.checkDHCP())
+    {
+      delay(100);
+    }
+    
+    //get the server ready
+    ftpServer.begin();
+    
+    //display connected info
+    while (! displayConnectionDetails()) {
+    delay(1000);
+    }
+    
+  Serial.println("Connected to Internet");
+  newNetworkState = STATUS_DISCONNECTED;
+}
+//----------------------------------------------------------
+
+
+//----------------------------------------------------------
+/*Check if the given String is a digit ?*/
+//---------------------------------------------------------- 
+bool isNumberDigit(String num)
+{
+  bool isDigit = false;
+  
+  if(num.equals("1")){isDigit = true;}
+  else if(num.equals("2")){isDigit = true;}
+  else if(num.equals("3")){isDigit = true;}
+  else if(num.equals("4")){isDigit = true;}
+  else if(num.equals("5")){isDigit = true;}
+  else if(num.equals("6")){isDigit = true;}
+  else if(num.equals("7")){isDigit = true;}
+  else if(num.equals("8")){isDigit = true;}
+  else if(num.equals("9")){isDigit = true;}
+  else if(num.equals("0")){isDigit = true;}
+  
+  return isDigit;
+}
+//----------------------------------------------------------
+
+//----------------------------------------------------------
+/*Set and Get SdFile dir*/
+//----------------------------------------------------------
+void setDir(SdFile s)
+{
+  parseSdFile = s;
+}
+
+SdFile getDir()
+{
+  return parseSdFile;
+}
+//----------------------------------------------------------  
