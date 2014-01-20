@@ -1,10 +1,24 @@
+/*------------------------------*/
+/*      NFC_PUNCH_SYSTEM        */
+/*------------------------------*/
+/*CopyRight        : Je7sen     */
+/*Hardware Version : v0.10      */
+/*Software Version : v1.12      */
+/*------------------------------*/
+
+//----------------------------------------------------------------------------------- 
+/*Local Define*/
+//-----------------------------------------------------------------------------------
+/*Open for push data to Google Spreadsheet*/
 #ifndef INTERNET
 #define INTERNET
 #endif
 
+/*Open for debugging*/
 #ifndef DEBUG
 #define DEBUG
 #endif
+//-----------------------------------------------------------------------------------
 
 //----------------------------------------------------------------------------------- 
 /*Include Library*/
@@ -125,6 +139,7 @@ int setting=0;
 int _sec=0,_min=0,_hour=0,_week=1,_date=1,_month=1,_year=2014;
 String timeString,First,Second,Third,Forth;
 int dateInt1,dateInt2,dateInt3,dateInt4;
+int hourInt1,hourInt2,hourInt3,hourInt4;
 String folder[20];
 String folder2[20];
 int folderCount =0;
@@ -134,6 +149,19 @@ bool secondLayer = false;
 bool dimDisplay = true;
 int dimMinuteLast = 0;
 int dimMinuteNow = 0;
+uint8_t tPunch1[16];
+uint8_t tPunch2[16];
+uint8_t tPunch3[16];
+bool isHalfDay = false;
+bool isHalfDayG = false;
+bool isWeekForSync = false;
+bool isDayToSetSync = false;
+const char *blank = "Blank";
+const char *am_in   = "******AM_IN*****";
+const char *am_out  = "*****AM_OUT*****";
+const char *pm_in   = "******PM_IN*****";
+const char *pm_out  = "*****PM_OUT*****";
+String actualDate;
 //-----------------------------------------------------------------------------------
 
 void setup() {
@@ -164,7 +192,11 @@ void setup() {
   lcd.setBacklight(WHITE);
     
   if (!SD.begin(4)) {
+    
+#ifdef DEBUG
     Serial.println("No SD Card");
+#endif
+    
    lcd.clear();
    lcd.setCursor(0,0);
    lcd.print("No Sd card.");
@@ -175,7 +207,10 @@ void setup() {
    else{
      if (!SD.exists("secure")) 
      {
+#ifdef DEBUG
        Serial.println("No File Found");
+#endif
+       
        lcd.clear();
        lcd.print("No File Found.");
        delay(1500);
@@ -202,7 +237,8 @@ void setup() {
   
   // initialize a FAT volume
   if (!volume.init(&card)) error("vol.init failed!");
-
+  
+#ifdef DEBUG
   PgmPrint("Volume is FAT");
   Serial.println(volume.fatType(),DEC);
   Serial.println();
@@ -221,7 +257,7 @@ void setup() {
   
   Serial.println();
   PgmPrintln("Done");
-  
+#endif
 
   //Get all wifi setting from SD Card
   if(getWlanSetting(&ssid,&pass,&mode)){
@@ -229,7 +265,7 @@ void setup() {
   }
     
 
-#if defined INTERNET
+#ifdef INTERNET
   if(getOnlineTime(&timeString))
   {
     setToOnlineTime(timeString);
@@ -246,8 +282,26 @@ void setup() {
 }
 
 
-void loop(){ 
+void loop(){
+ 
+  String wDay = clock.getWeek();
+  //sync time on every friday
+ if(wDay.equals("FRI") && (clock.getHour()==6) && isWeekForSync){
+#ifdef INTERNET
+  if(getOnlineTime(&timeString))
+  {
+    setToOnlineTime(timeString);
+    isWeekForSync = false;
+    isDayToSetSync = true;
+  }
+#endif   
+ }
+ if(wDay.equals("SAT") && isDayToSetSync){
+   isWeekForSync = true;
+   isDayToSetSync = false;
+ }
   
+  //dim the display after 2 minute
   if(dimDisplay){
     dimMinuteNow = clock.getMinute();
     if((dimMinuteNow-dimMinuteLast)>=2||(dimMinuteNow-dimMinuteLast)==-57){
@@ -255,7 +309,10 @@ void loop(){
       dimMinuteLast= 0;
       dimDisplay = false;
       lcd.setBacklight(GREEN);
-      Serial.println("Display dimmed.");
+      
+#ifdef DEBUG
+       Serial.println("Display dimmed.");
+#endif
     }
   }
   status_t networkState=cc3000.getStatus();
@@ -296,9 +353,11 @@ void loop(){
  
         // got a \n or \r new line, which means the string is done
         clientline[index] = 0;
- 
+         
+#ifdef DEBUG
         // Print it out for debugging
         Serial.println(clientline);
+#endif
  
         // Look for substring such as a request to get the root file
         if (strstr(clientline, "GET / ") != 0) {
@@ -312,9 +371,16 @@ void loop(){
           firstLayer = true;
           secondLayer = false;
           root.seekSet(416);
+          
+#ifdef DEBUG
           Serial.println(root.curPosition());
+#endif
+          
           ListFiles(root,clientRef, LS_R,0);
+          
+#ifdef DEBUG
           Serial.println(root.curPosition());
+#endif
           
         }else if (strstr(clientline, "GET /") != 0) {
 
@@ -332,10 +398,11 @@ void loop(){
             if(firstLayer){
               if(folder[k].equals((String)direc))
               {
-                
-                Serial.println("1st Layer");
-                Serial.println(folder[k]);
-                
+#ifdef DEBUG
+              Serial.println("1st Layer");
+              Serial.println(folder[k]);
+#endif
+
                 char di[folder[k].length()+1];
                 folder[k].toCharArray(di,folder[k].length()+1);
                 
@@ -350,13 +417,22 @@ void loop(){
                 clientRef.println();
                 SdFile s;
                 clientRef.println("<h2>Files:</h2>");
-                Serial.println(root.curPosition());
+                
+#ifdef DEBUG
+                 Serial.println(root.curPosition());
+#endif
+                
                 bool ope = s.open(root, di, O_READ); 
                 if (ope){
-                  Serial.println("opened the folder");
+#ifdef DEBUG
+                 Serial.println("opened the folder");
+#endif
+                  
                   ListFiles(s, clientRef, LS_R, 2);
                 }
+#ifdef DEBUG
                 Serial.println(root.curPosition());
+#endif
 //                root.seekSet(416);
                 
                 isFolder = true;
@@ -366,9 +442,10 @@ void loop(){
             }else if(secondLayer){
               if(folder2[k].equals((String)direc))
               {
-                
+#ifdef DEBUG
                 Serial.println("2nd Layer");
-
+#endif
+                
                char di[folder[folderIndex].length()+1];
                folder[folderIndex].toCharArray(di,folder[folderIndex].length()+1);
                 
@@ -377,8 +454,11 @@ void loop(){
                
                const char* DI=(const char*)di;
                const char* DI2=(const char*)di2;
+               
+#ifdef DEBUG
                 Serial.println(di);
                 Serial.println(di2); 
+#endif
                 
                 // send a standard http response header
                 clientRef.println("HTTP/1.1 200 OK");
@@ -386,20 +466,31 @@ void loop(){
                 clientRef.println();
                 SdFile s;
                 root.seekSet(416);
-                Serial.println(root.curPosition());
+                
+#ifdef DEBUG
+                 Serial.println(root.curPosition());
+#endif
                 
                 delay(20);
                 bool ope = s.open(&root ,di ,O_READ);
                 clientRef.println("<h2>Files:</h2>");
                 if (ope){
                   s.rewind();
+                  
+#ifdef DEBUG
                   Serial.println("step1");
+#endif
+                  
                   SdFile d;
                   delay(20);
                   bool ope1 = d.open(&s ,di2 ,O_READ);
                   if(ope1){
                   setDir(d);
+                  
+#ifdef DEBUG
                   Serial.println("opened the folder");
+#endif
+                  
                   ListFiles(d, clientRef, LS_R, 2);}
                 }
                 isFolder = true;
@@ -420,13 +511,19 @@ void loop(){
             if(fName.endsWith(".TXT")){
               isTextFile = true;
               if(!isNumberDigit(fName.substring(0,1))){
+#ifdef DEBUG
                 Serial.println(fName.substring(0,3));
+#endif
               }
               else if(!isNumberDigit(fName.substring(1,2))){
+#ifdef DEBUG
                 Serial.println(fName.substring(1,4));
+#endif
               }
               else if(!isNumberDigit(fName.substring(2,3))){
+#ifdef DEBUG
                 Serial.println(fName.substring(2,5));
+#endif
               }
             }
           
@@ -450,7 +547,9 @@ void loop(){
               break;
             }
           } 
-          Serial.println("Opened!");
+#ifdef DEBUG
+            Serial.println("Opened!");
+#endif
  
           clientRef.println("HTTP/1.1 200 OK");
           clientRef.println("Content-Type: text/plain");
@@ -543,15 +642,23 @@ void loop(){
         
         String time_((String)w+":"+(String)e+":"+(String)r);
         int yearIn2Digit = clock.getYear() - 2000;
-        String dateS("***->"+(String)clock.getDate()+"*");
-        String block = time_ + dateS;
-        
+        String dateS("***>"+(String)clock.getDate()+"*");
+        String block = time_;
         
         char blockChar[16];
         block.toCharArray(blockChar, block.length()+1);
+        const char *blockTo = blockChar;
+        const char *c_todayTime = blockChar;
         
-
-        const char * blockTo = blockChar;
+        String todayDate = (String)clock.getDate() + (String)clock.getMonth() + (String)clock.getYear();
+        char todayDate_c[16];
+        todayDate.toCharArray(todayDate_c,todayDate.length()+1);
+        const char *c_todayDate = todayDate_c;
+        
+        #ifdef DEBUG
+        Serial.println((block.length()+1));
+        Serial.println(blockTo);
+        #endif
         //write all 4 punch in a day inside NFC tag.
         //write to cloud when 4 punch recorded.
         if(data2[15] == 0)
@@ -559,21 +666,15 @@ void loop(){
 	  //write IN/OUT to NFC tag in block 6
           if(data2[0] == 'I')
           {
-            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
-            delay(10);
             uint8_t inout[16]={'O','U','T',0,0,0,0,0,0,0,0,0,0,0,0,'0'};
-            nfc.mifareclassic_WriteDataBlock (6, inout);
+            nfcWriteInOut(uid, uidLength, 4, keyab, inout);
           }
           else
           {
-            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
-            delay(10);
             uint8_t inout[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,'1'};
-            nfc.mifareclassic_WriteDataBlock (6, inout);
+            nfcWriteInOut(uid, uidLength, 4, keyab, inout);
             
-            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 12, 1, keyab);
-            delay(10);
-            nfc.mifareclassic_WriteNDEFString (13, blockTo);
+            nfcWriteTimeDate(uid, uidLength, 12, keyab, am_in, c_todayTime, c_todayDate);
           }
         }
         else if(data2[15] == '1')
@@ -581,21 +682,40 @@ void loop(){
 	  //write IN/OUT to NFC tag in block 6
           if(data2[0] == 'I')
           {
-            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
-            delay(10);
-            uint8_t inout[16]={'O','U','T',0,0,0,0,0,0,0,0,0,0,0,0,'2'};
-            nfc.mifareclassic_WriteDataBlock (6, inout);
-            
+            uint8_t tBuffer[16];
+            uint8_t dBuffer[16];
+            int tHour;
+            int tDate;
             nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 12, 1, keyab);
-            delay(10);
-            nfc.mifareclassic_WriteNDEFString (14, blockTo);
+            delay(20);
+            nfc.mifareclassic_ReadDataBlock (13, tBuffer);
+            nfc.mifareclassic_ReadDataBlock (14, dBuffer);
+            processTime(tBuffer,&tHour);
+            processDate(dBuffer,&tDate);
+            
+            #ifdef DEBUG
+            Serial.println(tDate);
+            #endif
+            
+            if((tDate!=clock.getDate())||((clock.getHour()-tHour)>=7)){
+              uint8_t inout[16]={'O','U','T',0,0,0,0,0,0,0,0,0,0,0,0,'4'};
+              nfcWriteInOut(uid, uidLength, 4, keyab, inout);
+            
+
+              nfcWriteTimeDate(uid, uidLength, 24, keyab, pm_out, c_todayTime, c_todayDate);
+            }
+            else{       
+              uint8_t inout[16]={'O','U','T',0,0,0,0,0,0,0,0,0,0,0,0,'2'};
+              nfcWriteInOut(uid, uidLength, 4, keyab, inout);
+            
+
+              nfcWriteTimeDate(uid, uidLength, 16, keyab, am_out, c_todayTime, c_todayDate);
+            }
           }
           else
           {
-            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
-            delay(10);
             uint8_t inout[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,'1'};
-            nfc.mifareclassic_WriteDataBlock (6, inout);
+            nfcWriteInOut(uid, uidLength, 4, keyab, inout);
           }
         }
         else if(data2[15] == '2')
@@ -603,21 +723,54 @@ void loop(){
 	  //write IN/OUT to NFC tag in block 6
           if(data2[0] == 'I')
           {
-            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
-            delay(10);
             uint8_t inout[16]={'O','U','T',0,0,0,0,0,0,0,0,0,0,0,0,'2'};
-            nfc.mifareclassic_WriteDataBlock (6, inout);
+            nfcWriteInOut(uid, uidLength, 4, keyab, inout);
           }
           else
           {
-            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
-            delay(10);
-            uint8_t inout[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,'3'};
-            nfc.mifareclassic_WriteDataBlock (6, inout);
-            
+            int tHour;
+            int tDate;
+            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 12, 1, keyab);
+            delay(20);
+            nfc.mifareclassic_ReadDataBlock (13, tPunch1);
             nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 16, 1, keyab);
-            delay(10);
-            nfc.mifareclassic_WriteNDEFString (17, blockTo);
+            delay(20);
+            nfc.mifareclassic_ReadDataBlock (17, tPunch2);
+            nfc.mifareclassic_ReadDataBlock (18, tPunch3);
+            
+            actualDate = processDate(tPunch3,&tDate);
+
+            if(tDate!=clock.getDate()){
+              isHalfDay = true;
+              if(clock.getHour()<12)
+              {
+                uint8_t inout[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,'1'};
+                nfcWriteInOut(uid, uidLength, 4, keyab, inout);
+ 
+                  nfcWriteTimeDate(uid, uidLength, 12, keyab, am_in, c_todayTime, c_todayDate);
+                  nfcWriteTimeDate(uid, uidLength, 16, keyab, am_out, blank, blank);
+                  nfcWriteTimeDate(uid, uidLength, 20, keyab, pm_in, blank, blank);
+                  nfcWriteTimeDate(uid, uidLength, 24, keyab, pm_out, blank, blank);
+                  
+              }
+              else{
+                uint8_t inout[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,'3'};
+                nfcWriteInOut(uid, uidLength, 4, keyab, inout);
+            
+
+                  nfcWriteTimeDate(uid, uidLength, 12, keyab, am_in, blank, blank);
+                  nfcWriteTimeDate(uid, uidLength, 16, keyab, am_out, blank, blank);
+                  nfcWriteTimeDate(uid, uidLength, 20, keyab, pm_in, c_todayTime, c_todayDate);
+                  nfcWriteTimeDate(uid, uidLength, 24, keyab, pm_out, blank, blank);
+              }
+            }
+            else{            
+              uint8_t inout[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,'3'};
+              nfcWriteInOut(uid, uidLength, 4, keyab, inout);
+            
+
+              nfcWriteTimeDate(uid, uidLength, 20, keyab, pm_in, c_todayTime, c_todayDate);
+            }
           }
         }
         else if(data2[15] == '3')
@@ -625,21 +778,16 @@ void loop(){
 	  //write IN/OUT to NFC tag in block 6
           if(data2[0] == 'I')
           {
-            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
-            delay(10);
             uint8_t inout[16]={'O','U','T',0,0,0,0,0,0,0,0,0,0,0,0,'4'};
-            nfc.mifareclassic_WriteDataBlock (6, inout);
+            nfcWriteInOut(uid, uidLength, 4, keyab, inout);
             
-            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 16, 1, keyab);
-            delay(10);
-            nfc.mifareclassic_WriteNDEFString (18, blockTo);
+
+            nfcWriteTimeDate(uid, uidLength, 24, keyab, pm_out, c_todayTime, c_todayDate);
           }
           else
           {
-            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
-            delay(10);
             uint8_t inout[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,'3'};
-            nfc.mifareclassic_WriteDataBlock (6, inout);
+            nfcWriteInOut(uid, uidLength, 4, keyab, inout);
           }
         }
         else if(data2[15] == '4')
@@ -647,50 +795,51 @@ void loop(){
 	  //write IN/OUT to NFC tag in block 6
           if(data2[0] == 'I')
           {
-            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
-            delay(10);
             uint8_t inout[16]={'O','U','T',0,0,0,0,0,0,0,0,0,0,0,0,'4'};
-            nfc.mifareclassic_WriteDataBlock (6, inout);
+            nfcWriteInOut(uid, uidLength, 4, keyab, inout);
           }
           else
           {
-            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
-            delay(10);
-            uint8_t inout[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,'1'};
-            nfc.mifareclassic_WriteDataBlock (6, inout);
+            if(clock.getHour()<12)
+            {
+              uint8_t inout[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,'1'};
+              nfcWriteInOut(uid, uidLength, 4, keyab, inout);
             
-            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 12, 1, keyab);
-            delay(10);
-            nfc.mifareclassic_WriteNDEFString (13, blockTo);
+                
+                nfcWriteTimeDate(uid, uidLength, 12, keyab, am_in, c_todayTime, c_todayDate);
+                nfcWriteTimeDate(uid, uidLength, 16, keyab, am_out, blank, blank);
+                nfcWriteTimeDate(uid, uidLength, 20, keyab, pm_in, blank, blank);
+                nfcWriteTimeDate(uid, uidLength, 24, keyab, pm_out, blank, blank);
+            }
+            else{
+              uint8_t inout[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,'3'};
+              nfcWriteInOut(uid, uidLength, 4, keyab, inout);
             
-            const char *blank = "Blank";
-            nfc.mifareclassic_WriteNDEFString (14, blank);
-            
-            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 16, 1, keyab);
-            delay(10);
-            nfc.mifareclassic_WriteNDEFString (17, blank);
-            nfc.mifareclassic_WriteNDEFString (18, blank);     
+                
+                nfcWriteTimeDate(uid, uidLength, 12, keyab, am_in, blank, blank);
+                nfcWriteTimeDate(uid, uidLength, 16, keyab, am_out, blank, blank);
+                nfcWriteTimeDate(uid, uidLength, 20, keyab, pm_in, c_todayTime, c_todayDate);
+                nfcWriteTimeDate(uid, uidLength, 24, keyab, pm_out, blank, blank);
+            }
+                
           }
         }
         else
         {
           if(data2[0] == 'I')
           {
-            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
-            delay(10);
             uint8_t inout[16]={'O','U','T',0,0,0,0,0,0,0,0,0,0,0,0,0};
-            nfc.mifareclassic_WriteDataBlock (6, inout);
+            nfcWriteInOut(uid, uidLength, 4, keyab, inout);
           }
           else
           {
-            nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
-            delay(10);
+
             uint8_t inout[16]={'I','N',0,0,0,0,0,0,0,0,0,0,0,0,0,'1'};
-            nfc.mifareclassic_WriteDataBlock (6, inout);
+            nfcWriteInOut(uid, uidLength, 4, keyab, inout);
           }
         }
         nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 4, 1, keyab);
-        delay(10);
+        delay(20);
         //reread block 6 to make sure IN/OUT written
         nfc.mifareclassic_ReadDataBlock(6, data2); 
         
@@ -700,23 +849,50 @@ void loop(){
         uint8_t Time_2[16];
         uint8_t Time_3[16];
         uint8_t Time_4[16];
+        uint8_t Date_3[16];
         
         nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 12, 1, keyab);
-        delay(10);
+        delay(20);
         nfc.mifareclassic_ReadDataBlock (13, Time_1);
-        nfc.mifareclassic_ReadDataBlock (14, Time_2); 
-        
+
         nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 16, 1, keyab);
-        delay(10);
-        nfc.mifareclassic_ReadDataBlock (17, Time_3);
-        nfc.mifareclassic_ReadDataBlock (18, Time_4);  
-       
-        First = processTime(Time_1,&dateInt1);
-        Second = processTime(Time_2,&dateInt2);
-        Third = processTime(Time_3,&dateInt3);
-        Forth = processTime(Time_4,&dateInt4);
+        delay(20);
+        nfc.mifareclassic_ReadDataBlock (17, Time_2);
         
-	}	
+        nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 20, 1, keyab);
+        delay(20);
+        nfc.mifareclassic_ReadDataBlock (21, Time_3);
+        nfc.mifareclassic_ReadDataBlock (22, Date_3);
+        
+        nfc.mifareclassic_AuthenticateBlock(uid, uidLength, 24, 1, keyab);
+        delay(20);
+        nfc.mifareclassic_ReadDataBlock (25, Time_4);  
+       
+        First = processTime(Time_1,&hourInt1);
+        Second = processTime(Time_2,&hourInt2);
+        Third = processTime(Time_3,&hourInt3);
+        Forth = processTime(Time_4,&hourInt4);
+        actualDate = processDate(Date_3,&hourInt1);
+        
+        #ifdef DEBUG
+        Serial.println(First);
+        Serial.println(Second);
+        Serial.println(Third);
+        Serial.println(Forth);
+        Serial.println(actualDate);
+        #endif
+        
+	}
+        
+        if(isHalfDay)
+        {
+          uint8_t BLANK[16]={'B','l','a','n','k',0,0,0,0,0,0,0,0,0,0,0};
+          First = processTime(tPunch1,&hourInt1);
+          Second = processTime(tPunch2,&hourInt2);
+          Third = processTime(BLANK,&hourInt3);
+          Forth = processTime(BLANK,&hourInt4);
+        }
+        	
 	//compare the value to check whether written or not
 	//then display the name of employees
         if (buff != data2[0])
@@ -779,7 +955,10 @@ void loop(){
         
         char filename_1[filename.length()+1];
         filename.toCharArray(filename_1,filename.length()+1);
+        
+#ifdef DEBUG
         Serial.println(filename);
+#endif
         
         char filepath_[filepath.length()+1];
         filepath.toCharArray(filepath_,filepath.length()+1);
@@ -807,18 +986,24 @@ void loop(){
        }  
        else
        {
-         Serial.println("Could't write to SD");
+#ifdef DEBUG
+          Serial.println("Could't write to SD");
+#endif
        }
        
-       if(data2[15]=='4')
+       if((data2[15]=='4') || isHalfDay)
        {
+         
          String monthfileName1(clock.getMonth()+(String)(clock.getYear()-2000));
          String filename2("/"+(String)clock.getYear()+"/"+clock.getMonth()+"/"+monthfileName1+".txt");
          String filepath("/"+(String)clock.getYear()+"/"+clock.getMonth()+"/");
          char filename_2[filename2.length()+1];
          
          filename2.toCharArray(filename_2,filename2.length()+1);
-         Serial.println(filename2);
+         
+#ifdef DEBUG
+          Serial.println(filename2);
+#endif
         
         char filepath_[filepath.length()+1];
         filepath.toCharArray(filepath_,filepath.length()+1);
@@ -833,27 +1018,33 @@ void loop(){
           write2sd(Third);
           write2sd(Forth);
           write2sd(clock.getWeek());
-          write2sd(date_);
-          if(data2[0]=='I')
-         {
-           dataFile.println("IN");
-         }
-         else
-         {
-           dataFile.println("OUT");
-         }
+          write2sd(actualDate);
+          if(isHalfDay){
+            isHalfDayG = true;
+            write2sd("is a half day yesterday");
+          }
+          dataFile.println();
        }
+       
        else
        {
-         Serial.println("Could't write to SD");
+#ifdef DEBUG
+          Serial.println("Could't write to SD");
+#endif
        }
-      
+        isHalfDay = false;
         dataFile.close();
        }
        
-
+#ifdef DEBUG
+        Serial.println(First);
+        Serial.println(Second);
+        Serial.println(Third);
+        Serial.println(Forth);
+        Serial.println(actualDate);
+        #endif
          
-#if defined INTERNET
+#ifdef INTERNET
        //write to Google SpreadSheet
         if(data2[0]=='I')
         {
@@ -865,7 +1056,12 @@ void loop(){
         }
         if(data2[15]=='4')
         {
-          push2drive2(dataString,First,Second,Third,Forth,clock.getWeek(),date_);
+          push2drive2(dataString,First,Second,Third,Forth,clock.getWeek(),actualDate);
+        }
+        else if(isHalfDayG)
+        {
+          isHalfDayG = false;
+          push2drive2(dataString,First,Second,Third,Forth,clock.getWeek(),actualDate);
         }
 #endif
          
@@ -873,7 +1069,7 @@ void loop(){
           // Wait a bit before reading the card again
          
          closeAll();
-         delay(1000);
+         delay(1500);
          lcd.clear();
         }
         else
@@ -1089,7 +1285,9 @@ boolean getOnlineTime(String *timeStr)
 {
   boolean returnValue = false;
   if (! cc3000.getHostByName(timeServer, &ip)) {
+#ifdef DEBUG
       Serial.println(F("Couldn't resolve!"));
+#endif
     }
   if(ip == 0)return false;
     
@@ -1105,7 +1303,9 @@ boolean getOnlineTime(String *timeStr)
   } 
   else
   {
+#ifdef DEBUG
     Serial.println("Could't Get online Time!");
+#endif
   }
   
   unsigned long lastRead = millis();
@@ -1138,7 +1338,11 @@ boolean getOnlineTime(String *timeStr)
                 while( c != '\n')
                 {
                   c=client.read();
+                  
+#ifdef DEBUG
                   Serial.print(c);
+#endif
+                  
                   *timeStr += c;
                 }
                 returnValue = true;
@@ -1161,41 +1365,59 @@ boolean getOnlineTime(String *timeStr)
 
 void setToOnlineTime(String timeStr)
 {
+#ifdef DEBUG
   Serial.println(timeStr);
+#endif
   char d[timeStr.length()+1];
   timeStr.toCharArray(d,timeStr.length()+1);
   
   String weekdayString = getTimeString(d,1,3);
   int weekdayInt = getweekdayInt(weekdayString);
+#ifdef DEBUG
   Serial.println(weekdayInt);
+#endif
   
   String dayString = getTimeString(d,6,7);
   int dayInt = dayString.toInt();
+#ifdef DEBUG
   Serial.println(dayInt);
+#endif
   
   String monthString = getTimeString(d,9,11);
   int monthInt = getmonthInt(monthString);
+#ifdef DEBUG
   Serial.println(monthInt);
+#endif
   
   String yearString = getTimeString(d,13,16);
   int yearInt = yearString.toInt();
+#ifdef DEBUG
   Serial.println(yearInt);
+#endif
   
   String hourString = getTimeString(d,18,19);
   int hourInt = hourString.toInt();
+#ifdef DEBUG
   Serial.println(hourInt);
+#endif
   
   String minString = getTimeString(d,21,22);
   int minInt = minString.toInt();
+#ifdef DEBUG
   Serial.println(minInt);
+#endif
   
   String secString = getTimeString(d,24,25);
   int secInt = secString.toInt();
+#ifdef DEBUG
   Serial.println(secInt);
+#endif
   
   //Set the time when get the time from time.is/Beijing  
   clock.set_time(secInt,minInt,hourInt,weekdayInt,dayInt,monthInt,yearInt);
+#ifdef DEBUG
   Serial.println("Time had been adjusted Automatically");
+#endif
 }
 //----------------------------------------------------------   
 
@@ -1203,28 +1425,52 @@ void setToOnlineTime(String timeStr)
 //----------------------------------------------------------
 /*process Time for write to cloud*/
 //----------------------------------------------------------
-String processTime(uint8_t timeArray[],int *dateI)
+String processTime(uint8_t timeArray[],int *hourI)
 {
-  int s=0;
   String Time_Str1="";
-  String Date_Str1="";
+  String Hour_Str1="";
   for(int h = 0; h<8; h++)
   {
     if(timeArray[h]!='*')
     {
-      Time_Str1 += (char)timeArray[h];
-      s++;
+      if(isNumberDigit((char)timeArray[h]) || (timeArray[h]==':')){
+        Time_Str1 += (char)timeArray[h];
+      }
+     }
+     if(h<2){
+       if(timeArray[h]!=':'){
+         Hour_Str1 += (char)timeArray[h];
+       }
      }
    }
-  s = s+5;
-  for(int h=0; h<2;h++)
-  {
-    if(timeArray[h+s]!='*')
-    {
-      Date_Str1+=(char)timeArray[h+s];
+   *hourI = Hour_Str1.toInt();
+   
+#ifdef DEBUG
+   Serial.print("Hour :");
+   Serial.println(Hour_Str1.toInt());
+#endif
+  return Time_Str1;
+}
+
+String processDate(uint8_t timeArray[],int *dateI)
+{
+  String Time_Str1="";
+  String Date_Str1="";
+  for(int i =0; i<9;i++){
+    if(timeArray[i]!= NULL){
+      Time_Str1 += (char)timeArray[i];
     }
-   }
-   *dateI = Date_Str1.toInt();
+    if(i<2){
+      if(isNumberDigit((char)timeArray[i])){
+        Date_Str1 += (char)timeArray[i];
+      }
+    }   
+  }
+  #ifdef DEBUG
+  Serial.print("Date string: ");
+  Serial.println(Date_Str1);
+  #endif
+  *dateI = Date_Str1.toInt();
   return Time_Str1;
 }
 //----------------------------------------------------------
@@ -1373,7 +1619,9 @@ void push2drive(String emplo,String time,String week, String date, String inout)
 
  
   if (! cc3000.getHostByName(server, &ip)) {
+#ifdef DEBUG
       Serial.println(F("Couldn't resolve!"));
+#endif
   }
   if(ip==0)return;
   
@@ -1392,13 +1640,17 @@ void push2drive(String emplo,String time,String week, String date, String inout)
   } 
   else
   {
+#ifdef DEBUG
     Serial.println("Could't Write to CLoud !");
+#endif
   }
   unsigned long lastRead = millis();
   while (client.connected() && (millis() - lastRead < IDLE_TIMEOUT_MS)) {
     while (client.available()) {
       char c = client.read();
+#ifdef DEBUG
       Serial.print(c);
+#endif
       lastRead = millis();
     }
   }
@@ -1415,7 +1667,9 @@ void push2drive2(String employ,String in1,String out1, String in2, String out2, 
 
  
   if (! cc3000.getHostByName(server, &ip)) {
+#ifdef DEBUG
       Serial.println(F("Couldn't resolve!"));
+#endif
   }
   if(ip==0)return;
   
@@ -1434,13 +1688,17 @@ void push2drive2(String employ,String in1,String out1, String in2, String out2, 
   } 
   else
   {
+#ifdef DEBUG
     Serial.println("Could't Write to CLoud !");
+#endif
   }
   unsigned long lastRead = millis();
   while (client.connected() && (millis() - lastRead < IDLE_TIMEOUT_MS)) {
     while (client.available()) {
       char c = client.read();
+#ifdef DEBUG
       Serial.print(c);
+#endif
       lastRead = millis();
     }
   }
@@ -1468,17 +1726,21 @@ bool displayConnectionDetails(void)
   
   if(!cc3000.getIPAddress(&ipAddress, &netmask, &gateway, &dhcpserv, &dnsserv))
   {
+#ifdef DEBUG
     Serial.println(F("Unable to retrieve the IP Address!\r\n"));
+#endif
     return false;
   }
   else
   {
+#ifdef DEBUG
     Serial.print(F("\nIP Addr: ")); cc3000.printIPdotsRev(ipAddress);
     Serial.print(F("\nNetmask: ")); cc3000.printIPdotsRev(netmask);
     Serial.print(F("\nGateway: ")); cc3000.printIPdotsRev(gateway);
     Serial.print(F("\nDHCPsrv: ")); cc3000.printIPdotsRev(dhcpserv);
     Serial.print(F("\nDNSserv: ")); cc3000.printIPdotsRev(dnsserv);
     Serial.println();
+#endif
     return true;
   }
 }
@@ -1570,9 +1832,10 @@ void ListFiles(SdFile root,Adafruit_CC3000_ClientRef client, uint8_t flags, uint
           if (p.name[i] == ' ') continue;
           folder[folderCount] += (char)p.name[i];
         }
-      
+#ifdef DEBUG
         Serial.print("Folder = ");
         Serial.println(folder[folderCount]);
+#endif
         folderCount ++;
         folder[folderCount] = "";
         folder[folderCount] += index;
@@ -1583,9 +1846,10 @@ void ListFiles(SdFile root,Adafruit_CC3000_ClientRef client, uint8_t flags, uint
           if (p.name[i] == ' ') continue;
           folder2[folderCount] += (char)p.name[i];
         }
-      
+#ifdef DEBUG
         Serial.print("Folder = ");
         Serial.println(folder2[folderCount]);
+#endif
         folderCount ++;
         folder2[folderCount] = "";
         folder2[folderCount] += index;
@@ -1738,6 +2002,7 @@ boolean getWlanSetting(String *ssid_c,String *pass_c, uint8_t *mode_c) {
 //----------------------------------------------------------
 void displayNetworkState(status_t state)
 {
+#ifdef DEBUG
   switch (state)
   {
     case 0:
@@ -1753,6 +2018,7 @@ void displayNetworkState(status_t state)
       Serial.println("Connected!");
       break;
   }
+#endif
 }
 //----------------------------------------------------------
 
@@ -1761,6 +2027,7 @@ void displayNetworkState(status_t state)
 //----------------------------------------------------------
 void displaySecurityMode(uint8_t mode)
 {
+#ifdef DEBUG
   switch (mode)
   {
     case 0:
@@ -1776,6 +2043,7 @@ void displaySecurityMode(uint8_t mode)
       Serial.println("WPA2");
       break;
   }
+#endif
 }
 //----------------------------------------------------------
   
@@ -1794,14 +2062,20 @@ void connectToNetwork(String ssid, String pass, uint8_t mode)
     const char* SSID_C = ssid_c;
     const char* PASS_C = pass_c;
     
+#ifdef DEBUG
     Serial.println(SSID_C);
     Serial.println(PASS_C);
+#endif
+    
     displaySecurityMode(mode);
     
     //Setup Internet//
     if(!cc3000.begin())
     {
+#ifdef DEBUG
       Serial.println("Could't Start Wifi");
+#endif
+      
       lcd.clear();
       lcd.print("Could't Start");
       while(1);
@@ -1809,7 +2083,10 @@ void connectToNetwork(String ssid, String pass, uint8_t mode)
     
     if (!cc3000.connectToAP(SSID_C,PASS_C, mode))
     {
+#ifdef DEBUG
       Serial.println("Could't Connect to network");
+#endif
+      
       lcd.clear();
       lcd.print("Could't Connect");
       while(1);
@@ -1827,8 +2104,10 @@ void connectToNetwork(String ssid, String pass, uint8_t mode)
     while (! displayConnectionDetails()) {
     delay(1000);
     }
-    
+#ifdef DEBUG  
   Serial.println("Connected to Internet");
+#endif
+  
   newNetworkState = STATUS_DISCONNECTED;
 }
 //----------------------------------------------------------
@@ -1854,6 +2133,24 @@ bool isNumberDigit(String num)
   
   return isDigit;
 }
+
+bool isNumberDigit(char num)
+{
+  bool isDigit = false;
+  
+  if(num =='1'){isDigit = true;}
+  else if(num =='2'){isDigit = true;}
+  else if(num =='3'){isDigit = true;}
+  else if(num =='4'){isDigit = true;}
+  else if(num =='5'){isDigit = true;}
+  else if(num =='6'){isDigit = true;}
+  else if(num =='7'){isDigit = true;}
+  else if(num =='8'){isDigit = true;}
+  else if(num =='9'){isDigit = true;}
+  else if(num =='0'){isDigit = true;}
+  
+  return isDigit;
+}
 //----------------------------------------------------------
 
 //----------------------------------------------------------
@@ -1869,3 +2166,23 @@ SdFile getDir()
   return parseSdFile;
 }
 //----------------------------------------------------------  
+
+//----------------------------------------------------------
+/*Write NFC Tag*/
+//----------------------------------------------------------
+void nfcWriteInOut(uint8_t* uid,uint8_t uidLength,uint32_t block,uint8_t* keyab,uint8_t inout[])
+{
+  nfc.mifareclassic_AuthenticateBlock(uid, uidLength, block, 1, keyab);
+  delay(20);
+  nfc.mifareclassic_WriteDataBlock (6, inout);
+}
+
+void nfcWriteTimeDate(uint8_t* uid,uint8_t uidLength,uint32_t block,uint8_t* keyab,const char* inout,const char* time,const char* date)
+{
+  nfc.mifareclassic_AuthenticateBlock(uid, uidLength, block, 1, keyab);
+  delay(20);
+  nfc.mifareclassic_WriteNDEFString (block, inout);
+  nfc.mifareclassic_WriteNDEFString (block+1, time);
+  nfc.mifareclassic_WriteNDEFString (block+2, date);
+}
+//----------------------------------------------------------
